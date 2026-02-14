@@ -1,0 +1,5 @@
+/* The class applied by the CodeMirror decoration */
+.letter-a-highlight {
+    color: var(--letter-a-highlight-color, #ff0000) !important;
+    font-weight: bold; /* Optional: makes it pop a bit more */
+}

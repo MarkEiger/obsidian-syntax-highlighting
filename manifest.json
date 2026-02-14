@@ -1,0 +1,10 @@
+{
+	"id": "obsidian-highlight-a-in-a",
+	"name": "Highlight 'a' in 'a'",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Highlights the letter 'a' inside code blocks of type 'a'.",
+	"author": "Gemini Code Assist",
+	"authorUrl": "https://github.com/obsidianmd",
+	"isDesktopOnly": false
+}
