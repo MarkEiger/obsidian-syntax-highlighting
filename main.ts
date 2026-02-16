@@ -74,27 +74,48 @@ export default class LetterAPlugin extends Plugin {
 					
 					// Define a widget that displays "b"
 					class BWidget extends WidgetType {
+						text: string;
+						constructor(text: string){
+							super();
+							this.text = text;
+						}
 						toDOM(view: EditorView): HTMLElement {
 							const span = document.createElement("span");
-							span.textContent = "ca";
+							span.textContent = this.text;
 							span.className = "letter-a-highlight";
 							return span;
 						}
 					}
 
-					const replaceDecoration = Decoration.replace({
-						widget: new BWidget(),
-					});
-
 					for (const { from, to } of view.visibleRanges) {
 						const text = view.state.sliceDoc(from, to);
 						const code_extention = plugin.settings.codeExtension;
-						const regex2 = new RegExp(`\`\`\`${code_extention}\n([\\s\\S]*?)\`\`\``, 'gmi');
+						const regex2 = new RegExp(`(\`\`\`${code_extention}\n)([\\s\\S]*?)(\`\`\`)`, 'gmi');
 						let match;
 						while ((match = regex2.exec(text)) !== null) {
-							const matchPos = from + match.index;
-							const endPos = matchPos + match[0].length;
-							builder.add(matchPos, matchPos+2, replaceDecoration);
+							/* todo: 
+							1) start by cororing the entire code block (keeping original text)
+							2) make the colouring affect only the inside, excluding the ```code_extension and ``` parts
+							3) make the colouring affect only a certain regex pattern (e.g., only the letter "a" inside the code block)
+							4) make said regex pattern customizable via settings (e.g., only the letter "a" or any other pattern)
+							*/
+							const matchPos = from + match.index + match[1].length; // Position of the start of the text inside the code block
+							const textInsideCodeBlock = match[2]; // The second capture group contains the text inside the code block
+							const endPos = matchPos + textInsideCodeBlock.length; // Position of the end of the text inside the code block
+							console.log("Found code block from", matchPos, "to", endPos);
+							console.log("Text inside code block:", textInsideCodeBlock);
+							console.log("length of text inside code block:", textInsideCodeBlock.length);
+							console.log("length of header and footer:", match[1].length, match[3].length);
+							for (let i = 0; i < textInsideCodeBlock.length; i++) {
+								const char = textInsideCodeBlock[i];
+								if (char === '\n') {
+									continue; // Skip newlines because modifing them is forbidden
+								}
+								const replaceDecoration = Decoration.replace({
+									widget: new BWidget(char),
+								});
+								builder.add(matchPos+i, matchPos+1+i, replaceDecoration);
+							}
 						}
 					}
 

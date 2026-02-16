@@ -69,26 +69,41 @@ var LetterAPlugin = class extends import_obsidian.Plugin {
         buildDecorations(view) {
           const builder = new import_state.RangeSetBuilder();
           class BWidget extends import_view.WidgetType {
+            constructor(text) {
+              super();
+              this.text = text;
+            }
             toDOM(view2) {
               const span = document.createElement("span");
-              span.textContent = "ca";
+              span.textContent = this.text;
               span.className = "letter-a-highlight";
               return span;
             }
           }
-          const replaceDecoration = import_view.Decoration.replace({
-            widget: new BWidget()
-          });
           for (const { from, to } of view.visibleRanges) {
             const text = view.state.sliceDoc(from, to);
             const code_extention = plugin.settings.codeExtension;
-            const regex2 = new RegExp(`\`\`\`${code_extention}
-([\\s\\S]*?)\`\`\``, "gmi");
+            const regex2 = new RegExp(`(\`\`\`${code_extention}
+)([\\s\\S]*?)(\`\`\`)`, "gmi");
             let match;
             while ((match = regex2.exec(text)) !== null) {
-              const matchPos = from + match.index;
-              const endPos = matchPos + match[0].length;
-              builder.add(matchPos, matchPos + 2, replaceDecoration);
+              const matchPos = from + match.index + match[1].length;
+              const textInsideCodeBlock = match[2];
+              const endPos = matchPos + textInsideCodeBlock.length;
+              console.log("Found code block from", matchPos, "to", endPos);
+              console.log("Text inside code block:", textInsideCodeBlock);
+              console.log("length of text inside code block:", textInsideCodeBlock.length);
+              console.log("length of header and footer:", match[1].length, match[3].length);
+              for (let i = 0; i < textInsideCodeBlock.length; i++) {
+                const char = textInsideCodeBlock[i];
+                if (char === "\n") {
+                  continue;
+                }
+                const replaceDecoration = import_view.Decoration.replace({
+                  widget: new BWidget(char)
+                });
+                builder.add(matchPos + i, matchPos + 1 + i, replaceDecoration);
+              }
             }
           }
           return builder.finish();
