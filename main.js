@@ -31,8 +31,10 @@ var import_obsidian = require("obsidian");
 var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
 var DEFAULT_SETTINGS = {
-  highlightColor: "#ff0000"
+  highlightColor: "#ff0000",
   // Default Red
+  codeExtension: "customCode"
+  // Default code block extension to look for
 };
 var LetterAPlugin = class extends import_obsidian.Plugin {
   async onload() {
@@ -53,6 +55,7 @@ var LetterAPlugin = class extends import_obsidian.Plugin {
     document.body.style.setProperty("--letter-a-highlight-color", this.settings.highlightColor);
   }
   buildEditorExtension() {
+    const plugin = this;
     return import_view.ViewPlugin.fromClass(
       class {
         constructor(view) {
@@ -78,10 +81,9 @@ var LetterAPlugin = class extends import_obsidian.Plugin {
           });
           for (const { from, to } of view.visibleRanges) {
             const text = view.state.sliceDoc(from, to);
-            const code_extention = "b";
+            const code_extention = plugin.settings.codeExtension;
             const regex2 = new RegExp(`\`\`\`${code_extention}
 ([\\s\\S]*?)\`\`\``, "gmi");
-            const regex = /```a\n([\s\S]*?)```/gmi;
             let match;
             while ((match = regex2.exec(text)) !== null) {
               const matchPos = from + match.index;
@@ -110,6 +112,12 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("Highlight Color").setDesc('Choose the color for the letter "a" inside "a" code blocks.').addColorPicker(
       (color) => color.setValue(this.plugin.settings.highlightColor).onChange(async (value) => {
         this.plugin.settings.highlightColor = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for.").addText(
+      (text) => text.setValue(this.plugin.settings.codeExtension).onChange(async (value) => {
+        this.plugin.settings.codeExtension = value;
         await this.plugin.saveSettings();
       })
     );

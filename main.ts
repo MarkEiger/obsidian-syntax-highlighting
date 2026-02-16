@@ -54,6 +54,7 @@ export default class LetterAPlugin extends Plugin {
 	}
 
 	buildEditorExtension(): Extension {
+		const plugin = this;
 		return ViewPlugin.fromClass(
 			class {
 				decorations: DecorationSet;
@@ -87,10 +88,8 @@ export default class LetterAPlugin extends Plugin {
 
 					for (const { from, to } of view.visibleRanges) {
 						const text = view.state.sliceDoc(from, to);
-						const code_extention = 'b';
+						const code_extention = plugin.settings.codeExtension;
 						const regex2 = new RegExp(`\`\`\`${code_extention}\n([\\s\\S]*?)\`\`\``, 'gmi');
-						//  TODO: use this logic to make the code extention a setting
-						const regex = /```a\n([\s\S]*?)```/gmi;
 						let match;
 						while ((match = regex2.exec(text)) !== null) {
 							const matchPos = from + match.index;
@@ -132,6 +131,18 @@ class LetterASettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.highlightColor)
 					.onChange(async (value) => {
 						this.plugin.settings.highlightColor = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName('Code Extension')
+			.setDesc('The code block extension to look for.')
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.codeExtension)
+					.onChange(async (value) => {
+						this.plugin.settings.codeExtension = value;
 						await this.plugin.saveSettings();
 					})
 			);
