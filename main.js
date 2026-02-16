@@ -68,7 +68,7 @@ var LetterAPlugin = class extends import_obsidian.Plugin {
           class BWidget extends import_view.WidgetType {
             toDOM(view2) {
               const span = document.createElement("span");
-              span.textContent = "c";
+              span.textContent = "ca";
               span.className = "letter-a-highlight";
               return span;
             }
@@ -78,11 +78,15 @@ var LetterAPlugin = class extends import_obsidian.Plugin {
           });
           for (const { from, to } of view.visibleRanges) {
             const text = view.state.sliceDoc(from, to);
+            const code_extention = "b";
+            const regex2 = new RegExp(`\`\`\`${code_extention}
+([\\s\\S]*?)\`\`\``, "gmi");
             const regex = /```a\n([\s\S]*?)```/gmi;
             let match;
-            while ((match = regex.exec(text)) !== null) {
+            while ((match = regex2.exec(text)) !== null) {
               const matchPos = from + match.index;
-              builder.add(matchPos, matchPos + 1, replaceDecoration);
+              const endPos = matchPos + match[0].length;
+              builder.add(matchPos, matchPos + 2, replaceDecoration);
             }
           }
           return builder.finish();

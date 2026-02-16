@@ -12,10 +12,12 @@ import {
 // 1. Define Settings Interface
 interface LetterAPluginSettings {
 	highlightColor: string;
+	codeExtension: string; // Future setting for code block extension (e.g., "a")
 }
 
 const DEFAULT_SETTINGS: LetterAPluginSettings = {
 	highlightColor: '#ff0000', // Default Red
+	codeExtension: 'customCode', // Default code block extension to look for
 };
 
 // 2. The Main Plugin Class
@@ -73,7 +75,7 @@ export default class LetterAPlugin extends Plugin {
 					class BWidget extends WidgetType {
 						toDOM(view: EditorView): HTMLElement {
 							const span = document.createElement("span");
-							span.textContent = "c";
+							span.textContent = "ca";
 							span.className = "letter-a-highlight";
 							return span;
 						}
@@ -85,11 +87,15 @@ export default class LetterAPlugin extends Plugin {
 
 					for (const { from, to } of view.visibleRanges) {
 						const text = view.state.sliceDoc(from, to);
+						const code_extention = 'b';
+						const regex2 = new RegExp(`\`\`\`${code_extention}\n([\\s\\S]*?)\`\`\``, 'gmi');
+						//  TODO: use this logic to make the code extention a setting
 						const regex = /```a\n([\s\S]*?)```/gmi;
 						let match;
-						while ((match = regex.exec(text)) !== null) {
+						while ((match = regex2.exec(text)) !== null) {
 							const matchPos = from + match.index;
-							builder.add(matchPos, matchPos + 1, replaceDecoration);
+							const endPos = matchPos + match[0].length;
+							builder.add(matchPos, matchPos+2, replaceDecoration);
 						}
 					}
 
