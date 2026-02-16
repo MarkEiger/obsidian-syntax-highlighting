@@ -85,7 +85,7 @@ export default class LetterAPlugin extends Plugin {
 
 					for (const { from, to } of view.visibleRanges) {
 						const text = view.state.sliceDoc(from, to);
-						const regex = /a/g;
+						const regex = /```a\n([\s\S]*?)```/gmi;
 						let match;
 						while ((match = regex.exec(text)) !== null) {
 							const matchPos = from + match.index;
