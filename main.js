@@ -81,28 +81,26 @@ var LetterAPlugin = class extends import_obsidian.Plugin {
             }
           }
           for (const { from, to } of view.visibleRanges) {
-            const text = view.state.sliceDoc(from, to);
+            const file_text = view.state.sliceDoc(from, to);
             const code_extention = plugin.settings.codeExtension;
-            const regex2 = new RegExp(`(\`\`\`${code_extention}
+            const code_block_regex = new RegExp(`(\`\`\`${code_extention}
 )([\\s\\S]*?)(\`\`\`)`, "gmi");
-            let match;
-            while ((match = regex2.exec(text)) !== null) {
-              const matchPos = from + match.index + match[1].length;
-              const textInsideCodeBlock = match[2];
-              const endPos = matchPos + textInsideCodeBlock.length;
-              console.log("Found code block from", matchPos, "to", endPos);
-              console.log("Text inside code block:", textInsideCodeBlock);
-              console.log("length of text inside code block:", textInsideCodeBlock.length);
-              console.log("length of header and footer:", match[1].length, match[3].length);
-              for (let i = 0; i < textInsideCodeBlock.length; i++) {
-                const char = textInsideCodeBlock[i];
-                if (char === "\n") {
-                  continue;
-                }
+            const HEADER_ID = 1;
+            const BLOCK_TEXT_ID = 2;
+            const FOOTER_ID = 3;
+            let code_block;
+            while ((code_block = code_block_regex.exec(file_text)) !== null) {
+              const start_of_code_block = from + code_block.index + code_block[HEADER_ID].length;
+              const textInsideCodeBlock = code_block[BLOCK_TEXT_ID];
+              const target_regex = /\w+/gi;
+              let match;
+              while ((match = target_regex.exec(textInsideCodeBlock)) !== null) {
+                const match_content = match[0];
+                const matchPos = start_of_code_block + match.index;
                 const replaceDecoration = import_view.Decoration.replace({
-                  widget: new BWidget(char)
+                  widget: new BWidget(match_content)
                 });
-                builder.add(matchPos + i, matchPos + 1 + i, replaceDecoration);
+                builder.add(matchPos, matchPos + match_content.length, replaceDecoration);
               }
             }
           }
@@ -130,7 +128,7 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for.").addText(
+    new import_obsidian.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for. (regex syntax)").addText(
       (text) => text.setValue(this.plugin.settings.codeExtension).onChange(async (value) => {
         this.plugin.settings.codeExtension = value;
         await this.plugin.saveSettings();
