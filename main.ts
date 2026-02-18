@@ -9,7 +9,7 @@ import {
 	WidgetType,
 } from '@codemirror/view';
 
-import * as lexing from "./lexing/index";
+import {lexers} from "./lexing/index";
 
 // 1. Define Settings Interface
 interface LetterAPluginSettings {

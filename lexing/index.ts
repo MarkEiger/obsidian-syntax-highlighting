@@ -1,1 +1,2 @@
-import * as lexers from "./lexers/index";
+export * as index from "./lexers/index";
+export { lexers } from "./api";
