@@ -195,15 +195,34 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h1", { text: "Lexers" });
     for (const lexer of lexers) {
       const lexerDiv = containerEl.createDiv();
-      new import_obsidian.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).addText((text) => {
-      }).setClass("tokens-colors-header");
+      const header = new import_obsidian.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).setClass("tokens-colors-header");
+      header.settingEl.addClass("collapsed");
+      const tokensDiv = lexerDiv.createDiv();
+      tokensDiv.hide();
+      header.addExtraButton((btn) => {
+        btn.setIcon("chevron-right").setTooltip("Expand").onClick(() => {
+          if (tokensDiv.isShown()) {
+            tokensDiv.hide();
+            btn.setIcon("chevron-right");
+            btn.setTooltip("Expand");
+            header.settingEl.addClass("collapsed");
+          } else {
+            tokensDiv.show();
+            btn.setIcon("chevron-down");
+            btn.setTooltip("Collapse");
+            header.settingEl.removeClass("collapsed");
+          }
+        });
+      });
       let tokens = lexer.getAvailableToeknTypes();
+      if (tokens.length === 0)
+        continue;
       const last_token = tokens[tokens.length - 1];
       tokens = tokens.slice(0, -1);
       for (const token of tokens) {
-        new import_obsidian.Setting(lexerDiv).setName(`${token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-element");
+        new import_obsidian.Setting(tokensDiv).setName(`${token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-element");
       }
-      new import_obsidian.Setting(lexerDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
+      new import_obsidian.Setting(tokensDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
     }
   }
 };

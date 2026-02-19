@@ -198,25 +198,49 @@ class LetterASettingTab extends PluginSettingTab {
 		for (const lexer of lexers) {
 			const lexerDiv = containerEl.createDiv();
 
-			new Setting(lexerDiv)
+			const header = new Setting(lexerDiv)
 				.setName(lexer.getExtention())
 				.setDesc(`extention for the ${lexer.getExtention()} lexer`)
-				.addText((text) => {})
 				.setClass('tokens-colors-header');
 
+			header.settingEl.addClass('collapsed');
+
+			const tokensDiv = lexerDiv.createDiv();
+			tokensDiv.hide();
+
+			header.addExtraButton((btn) => {
+				btn.setIcon('chevron-right')
+					.setTooltip('Expand')
+					.onClick(() => {
+						if (tokensDiv.isShown()) {
+							tokensDiv.hide();
+							btn.setIcon('chevron-right');
+							btn.setTooltip('Expand');
+							header.settingEl.addClass('collapsed');
+						} else {
+							tokensDiv.show();
+							btn.setIcon('chevron-down');
+							btn.setTooltip('Collapse');
+							header.settingEl.removeClass('collapsed');
+						}
+					});
+			});
+
 			let tokens = lexer.getAvailableToeknTypes();
+			if (tokens.length === 0) continue;
+
 			const last_token = tokens[tokens.length - 1];
 			// TODO: verufy there are tokens
 			tokens = tokens.slice(0, -1); // remove the last token since it will be used as the header for the section of the tokens colors, and i dont want it to be colored like the rest of the tokens
 			
 			// Token Color Settings
 			for (const token of tokens) {
-				new Setting(lexerDiv)
+				new Setting(tokensDiv)
 					.setName(`${token} Color`)
 					.addColorPicker((color) => color.setValue('#ff0000'))
 					.setClass('tokens-colors-element');
 			}
-			new Setting(lexerDiv)
+			new Setting(tokensDiv)
 				.setName(`${last_token} Color`)
 				.addColorPicker((color) => color.setValue('#ff0000'))
 				.setClass('tokens-colors-footer');
