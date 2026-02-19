@@ -30,6 +30,64 @@ module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
 var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
+
+// lexing/lexers/index.ts
+var lexers_exports = {};
+__export(lexers_exports, {
+  ExampleLexer: () => ExampleLexer,
+  TestLexer: () => TestLexer
+});
+
+// lexing/api.ts
+var lexers = [];
+
+// lexing/lexers/example.ts
+var ExampleLexer = class {
+  getExtention() {
+    return "example";
+  }
+  getAvailableToeknTypes() {
+    return ["example", "example2"];
+  }
+  tokenize(text) {
+    const target = /\w+/gi;
+    let match;
+    const tokens = [];
+    while ((match = target.exec(text)) !== null) {
+      tokens.push({
+        text: match[0],
+        type: "example"
+      });
+    }
+    return tokens;
+  }
+};
+lexers.push(new ExampleLexer());
+
+// lexing/lexers/test.ts
+var TestLexer = class {
+  getExtention() {
+    return "test";
+  }
+  getAvailableToeknTypes() {
+    return ["test", "test2"];
+  }
+  tokenize(text) {
+    const target = /\w+/gi;
+    let match;
+    const tokens = [];
+    while ((match = target.exec(text)) !== null) {
+      tokens.push({
+        text: match[0],
+        type: "test"
+      });
+    }
+    return tokens;
+  }
+};
+lexers.push(new TestLexer());
+
+// main.ts
 var DEFAULT_SETTINGS = {
   highlightColor: "#ff0000",
   // Default Red
@@ -134,5 +192,18 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    containerEl.createEl("h1", { text: "Lexers" });
+    for (const lexer of lexers) {
+      const lexerDiv = containerEl.createDiv();
+      new import_obsidian.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).addText((text) => {
+      }).setClass("tokens-colors-header");
+      let tokens = lexer.getAvailableToeknTypes();
+      const last_token = tokens[tokens.length - 1];
+      tokens = tokens.slice(0, -1);
+      for (const token of tokens) {
+        new import_obsidian.Setting(lexerDiv).setName(`${token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-element");
+      }
+      new import_obsidian.Setting(lexerDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
+    }
   }
 };

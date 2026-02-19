@@ -1,4 +1,4 @@
-import { Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { Plugin, PluginSettingTab, Setting, ColorComponent } from 'obsidian';
 import { Extension, RangeSetBuilder } from '@codemirror/state';
 import {
 	Decoration,
@@ -159,12 +159,13 @@ class LetterASettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
+		// if the ai slop fails, just analyze this and write my own code
 		const { containerEl } = this;
 		containerEl.empty();
 
 		containerEl.createEl('h2', { text: 'Letter "a" Highlighter Settings' });
 
-		new Setting(containerEl)
+		new Setting(containerEl) // Highlight Color Setting
 			.setName('Highlight Color')
 			.setDesc('Choose the color for the letter "a" inside "a" code blocks.')
 			.addColorPicker((color) =>
@@ -176,7 +177,7 @@ class LetterASettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(containerEl) // Code Extension Setting
 			.setName('Code Extension')
 			.setDesc('The code block extension to look for. (regex syntax)')
 			.addText((text) =>
@@ -187,5 +188,38 @@ class LetterASettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+
+		
+
+		// Lexer Settings Section
+		containerEl.createEl('h1', { text: 'Lexers' });
+
+		for (const lexer of lexers) {
+			const lexerDiv = containerEl.createDiv();
+
+			new Setting(lexerDiv)
+				.setName(lexer.getExtention())
+				.setDesc(`extention for the ${lexer.getExtention()} lexer`)
+				.addText((text) => {})
+				.setClass('tokens-colors-header');
+
+			let tokens = lexer.getAvailableToeknTypes();
+			const last_token = tokens[tokens.length - 1];
+			// TODO: verufy there are tokens
+			tokens = tokens.slice(0, -1); // remove the last token since it will be used as the header for the section of the tokens colors, and i dont want it to be colored like the rest of the tokens
+			
+			// Token Color Settings
+			for (const token of tokens) {
+				new Setting(lexerDiv)
+					.setName(`${token} Color`)
+					.addColorPicker((color) => color.setValue('#ff0000'))
+					.setClass('tokens-colors-element');
+			}
+			new Setting(lexerDiv)
+				.setName(`${last_token} Color`)
+				.addColorPicker((color) => color.setValue('#ff0000'))
+				.setClass('tokens-colors-footer');
+		}
 	}
 }

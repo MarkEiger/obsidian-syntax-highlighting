@@ -3,3 +3,57 @@
     color: var(--letter-a-highlight-color, #ff0000) !important;
     font-weight: bold; /* Optional: makes it pop a bit more */
 }
+
+.tokens-colors {
+  display: flex;
+  background-color: var(--background-primary-alt);
+  flex-direction: column;
+  padding-left: var(--size-4-4);
+  padding-right: var(--size-4-4);
+  padding-top: var(--size-4-2);
+  padding-bottom: var(--size-4-4);
+  border-left: 2px solid var(--background-modifier-border);
+  border-right: 2px solid var(--background-modifier-border);
+}
+
+.tokens-colors-header {
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  border: 2px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-left: var(--size-4-2);
+  padding-right: var(--size-4-2);
+  margin-bottom: 0;
+}
+.tokens-colors-header,
+.tokens-colors-element,
+.tokens-colors-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.tokens-colors-element {
+  padding-left: var(--size-4-2);
+  padding-right: var(--size-4-2);
+  border-left: 2px solid var(--background-modifier-border);
+  border-right: 2px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
+  border-top: none;
+  border-radius: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.tokens-colors-footer {
+  border-radius: 0 0 var(--radius-l) var(--radius-l);
+  border: 2px solid var(--background-modifier-border);
+  border-top: none;
+  padding-left: var(--size-4-2);
+  padding-right: var(--size-4-2);
+  margin-top: 0;
+}
+
+.tokens-colors-header > .setting-item-info,
+.tokens-colors-element > .setting-item-info,
+.tokens-colors-footer > .setting-item-info {
+    flex: none;
+}

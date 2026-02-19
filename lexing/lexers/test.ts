@@ -1,11 +1,11 @@
 import {Lexer, Token, lexers} from "../api";
 
-export class ExampleLexer implements Lexer{
+export class TestLexer implements Lexer{
     getExtention(): string {
-        return "example";
+        return "test";
     }
     getAvailableToeknTypes(): string[] {
-        return ["example", "example2"];
+        return ["test", "test2"];
     }
     tokenize(text: string): Token[] {
         const target = /\w+/gi;
@@ -14,11 +14,11 @@ export class ExampleLexer implements Lexer{
         while ((match = target.exec(text)) !== null) {
             tokens.push({
                 text: match[0],
-                type: "example"
+                type: "test"
             });
         }
         return tokens;
     }
 }
 
-lexers.push(new ExampleLexer());
+lexers.push(new TestLexer());
