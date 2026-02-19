@@ -27,9 +27,12 @@ __export(main_exports, {
   default: () => LetterAPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
+
+// settings/settings.ts
+var import_obsidian = require("obsidian");
 
 // lexing/lexers/index.ts
 var lexers_exports = {};
@@ -87,6 +90,65 @@ var TestLexer = class {
 };
 lexers.push(new TestLexer());
 
+// settings/settings.ts
+var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Highlighter Settings" });
+    new import_obsidian.Setting(containerEl).setName("Highlight Color").setDesc('Choose the color for the letter "a" inside "a" code blocks.').addColorPicker(
+      (color) => color.setValue(this.plugin.settings.highlightColor).onChange(async (value) => {
+        this.plugin.settings.highlightColor = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for. (regex syntax)").addText(
+      (text) => text.setValue(this.plugin.settings.codeExtension).onChange(async (value) => {
+        this.plugin.settings.codeExtension = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    containerEl.createEl("h1", { text: "Lexers" });
+    for (const lexer of lexers) {
+      const lexerDiv = containerEl.createDiv();
+      const header = new import_obsidian.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).addToggle((toggle) => {
+        toggle.setValue(true);
+      }).setClass("tokens-colors-header");
+      header.settingEl.addClass("collapsed");
+      const tokensDiv = lexerDiv.createDiv();
+      tokensDiv.hide();
+      header.addExtraButton((btn) => {
+        btn.setIcon("chevron-right").setTooltip("Expand").onClick(() => {
+          if (tokensDiv.isShown()) {
+            tokensDiv.hide();
+            btn.setIcon("chevron-right");
+            btn.setTooltip("Expand");
+            header.settingEl.addClass("collapsed");
+          } else {
+            tokensDiv.show();
+            btn.setIcon("chevron-down");
+            btn.setTooltip("Collapse");
+            header.settingEl.removeClass("collapsed");
+          }
+        });
+      });
+      let tokens = lexer.getAvailableToeknTypes();
+      if (tokens.length === 0)
+        continue;
+      const last_token = tokens[tokens.length - 1];
+      tokens = tokens.slice(0, -1);
+      for (const token of tokens) {
+        new import_obsidian.Setting(tokensDiv).setName(`${token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-element");
+      }
+      new import_obsidian.Setting(tokensDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
+    }
+  }
+};
+
 // main.ts
 var DEFAULT_SETTINGS = {
   highlightColor: "#ff0000",
@@ -94,7 +156,7 @@ var DEFAULT_SETTINGS = {
   codeExtension: "customCode"
   // Default code block extension to look for
 };
-var LetterAPlugin = class extends import_obsidian.Plugin {
+var LetterAPlugin = class extends import_obsidian2.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerEditorExtension(this.buildEditorExtension());
@@ -169,61 +231,5 @@ var LetterAPlugin = class extends import_obsidian.Plugin {
         decorations: (v) => v.decorations
       }
     );
-  }
-};
-var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
-  constructor(app, plugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-  display() {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.createEl("h2", { text: 'Letter "a" Highlighter Settings' });
-    new import_obsidian.Setting(containerEl).setName("Highlight Color").setDesc('Choose the color for the letter "a" inside "a" code blocks.').addColorPicker(
-      (color) => color.setValue(this.plugin.settings.highlightColor).onChange(async (value) => {
-        this.plugin.settings.highlightColor = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for. (regex syntax)").addText(
-      (text) => text.setValue(this.plugin.settings.codeExtension).onChange(async (value) => {
-        this.plugin.settings.codeExtension = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    containerEl.createEl("h1", { text: "Lexers" });
-    for (const lexer of lexers) {
-      const lexerDiv = containerEl.createDiv();
-      const header = new import_obsidian.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).addText((text) => {
-      }).setClass("tokens-colors-header");
-      header.settingEl.addClass("collapsed");
-      const tokensDiv = lexerDiv.createDiv();
-      tokensDiv.hide();
-      header.addExtraButton((btn) => {
-        btn.setIcon("chevron-right").setTooltip("Expand").onClick(() => {
-          if (tokensDiv.isShown()) {
-            tokensDiv.hide();
-            btn.setIcon("chevron-right");
-            btn.setTooltip("Expand");
-            header.settingEl.addClass("collapsed");
-          } else {
-            tokensDiv.show();
-            btn.setIcon("chevron-down");
-            btn.setTooltip("Collapse");
-            header.settingEl.removeClass("collapsed");
-          }
-        });
-      });
-      let tokens = lexer.getAvailableToeknTypes();
-      if (tokens.length === 0)
-        continue;
-      const last_token = tokens[tokens.length - 1];
-      tokens = tokens.slice(0, -1);
-      for (const token of tokens) {
-        new import_obsidian.Setting(tokensDiv).setName(`${token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-element");
-      }
-      new import_obsidian.Setting(tokensDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
-    }
   }
 };
