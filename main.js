@@ -195,7 +195,8 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h1", { text: "Lexers" });
     for (const lexer of lexers) {
       const lexerDiv = containerEl.createDiv();
-      const header = new import_obsidian.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).setClass("tokens-colors-header");
+      const header = new import_obsidian.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).addText((text) => {
+      }).setClass("tokens-colors-header");
       header.settingEl.addClass("collapsed");
       const tokensDiv = lexerDiv.createDiv();
       tokensDiv.hide();

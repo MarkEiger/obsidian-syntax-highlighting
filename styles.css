@@ -61,4 +61,5 @@
 .tokens-colors-header.collapsed {
   border-radius: var(--radius-l);
   border-bottom-width: 2px;
+  margin-bottom: 8px;
 }

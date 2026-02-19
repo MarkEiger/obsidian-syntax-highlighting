@@ -201,6 +201,7 @@ class LetterASettingTab extends PluginSettingTab {
 			const header = new Setting(lexerDiv)
 				.setName(lexer.getExtention())
 				.setDesc(`extention for the ${lexer.getExtention()} lexer`)
+				.addText((text) =>{})
 				.setClass('tokens-colors-header');
 
 			header.settingEl.addClass('collapsed');
