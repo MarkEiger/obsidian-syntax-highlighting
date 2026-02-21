@@ -24,6 +24,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // main.ts
 var main_exports = {};
 __export(main_exports, {
+  Colour: () => Colour,
   default: () => LetterAPlugin
 });
 module.exports = __toCommonJS(main_exports);
@@ -94,6 +95,7 @@ lexers.push(new TestLexer());
 var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    this.paletteExpanded = false;
     this.plugin = plugin;
   }
   display() {
@@ -112,6 +114,58 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    containerEl.createEl("h2", { text: "Default Colors" });
+    const defaultColorsDiv = containerEl.createDiv();
+    const colorsHeader = new import_obsidian.Setting(defaultColorsDiv).setName("Palette").setDesc("Manage default colors").setClass("tokens-colors-header");
+    if (!this.paletteExpanded)
+      colorsHeader.settingEl.addClass("collapsed");
+    const colorsContainer = defaultColorsDiv.createDiv();
+    if (!this.paletteExpanded)
+      colorsContainer.hide();
+    colorsHeader.addExtraButton((btn) => {
+      btn.setIcon(this.paletteExpanded ? "chevron-down" : "chevron-right").setTooltip(this.paletteExpanded ? "Collapse" : "Expand").onClick(() => {
+        this.paletteExpanded = !this.paletteExpanded;
+        if (!this.paletteExpanded) {
+          colorsContainer.hide();
+          btn.setIcon("chevron-right");
+          btn.setTooltip("Expand");
+          colorsHeader.settingEl.addClass("collapsed");
+        } else {
+          colorsContainer.show();
+          btn.setIcon("chevron-down");
+          btn.setTooltip("Collapse");
+          colorsHeader.settingEl.removeClass("collapsed");
+        }
+      });
+    });
+    this.plugin.settings.defaultColors.forEach((colorValue, index) => {
+      const setting = new import_obsidian.Setting(colorsContainer);
+      setting.addText((text) => {
+        text.setValue(colorValue.name).onChange(async (value) => {
+          this.plugin.settings.defaultColors[index].name = value;
+          await this.plugin.saveSettings();
+        });
+        setting.nameEl.appendChild(text.inputEl);
+      }).addColorPicker((color) => {
+        color.setValue(colorValue.value).onChange(async (value) => {
+          this.plugin.settings.defaultColors[index].value = value;
+          await this.plugin.saveSettings();
+        });
+      }).addExtraButton((btn) => {
+        btn.setIcon("trash").setTooltip("Remove").onClick(async () => {
+          this.plugin.settings.defaultColors.splice(index, 1);
+          await this.plugin.saveSettings();
+          this.display();
+        });
+      }).setClass("tokens-colors-element");
+    });
+    new import_obsidian.Setting(colorsContainer).setName("Add Color").addButton((btn) => {
+      btn.setButtonText("Add").onClick(async () => {
+        this.plugin.settings.defaultColors.push(new Colour("New Color", "#ffffff"));
+        await this.plugin.saveSettings();
+        this.display();
+      });
+    }).setClass("tokens-colors-footer");
     containerEl.createEl("h1", { text: "Lexers" });
     for (const lexer of lexers) {
       const lexerDiv = containerEl.createDiv();
@@ -150,11 +204,25 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
 };
 
 // main.ts
+var Colour = class {
+  constructor(name, value) {
+    this.name = name;
+    this.value = value;
+  }
+};
 var DEFAULT_SETTINGS = {
   highlightColor: "#ff0000",
   // Default Red
-  codeExtension: "customCode"
+  codeExtension: "customCode",
   // Default code block extension to look for
+  defaultColors: [
+    new Colour("Red", "#ff0000"),
+    new Colour("Green", "#00ff00"),
+    new Colour("Blue", "#0000ff"),
+    new Colour("Yellow", "#ffff00"),
+    new Colour("Cyan", "#00ffff"),
+    new Colour("Magenta", "#ff00ff")
+  ]
 };
 var LetterAPlugin = class extends import_obsidian2.Plugin {
   async onload() {

@@ -11,15 +11,33 @@ import {
 
 import { LetterASettingTab } from 'settings/settings';
 
+export class Colour{
+	name: string;
+	value: string;
+	constructor(name: string, value: string) {
+		this.name = name;
+		this.value = value;
+	}
+}
+
 // 1. Define Settings Interface
 interface LetterAPluginSettings {
 	highlightColor: string;
 	codeExtension: string; // Future setting for code block extension (e.g., "a")
+	defaultColors: Colour[];
 }
 
 const DEFAULT_SETTINGS: LetterAPluginSettings = {
 	highlightColor: '#ff0000', // Default Red
 	codeExtension: 'customCode', // Default code block extension to look for
+	defaultColors: [
+		new Colour('Red', '#ff0000'),
+		new Colour('Green', '#00ff00'),
+		new Colour('Blue', '#0000ff'),
+		new Colour('Yellow', '#ffff00'),
+		new Colour('Cyan', '#00ffff'),
+		new Colour('Magenta', '#ff00ff')
+	],
 };
 
 // 2. The Main Plugin Class

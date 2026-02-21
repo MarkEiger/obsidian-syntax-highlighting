@@ -1,10 +1,12 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import {lexers} from "../lexing/index";
 import LetterAPlugin from '../main';
+import {Colour} from '../main';
 
 // 3. The Settings Tab Class
 export class LetterASettingTab extends PluginSettingTab {
 	plugin: LetterAPlugin;
+	private paletteExpanded = false;
 
 	constructor(app: any, plugin: LetterAPlugin) {
 		super(app, plugin);
@@ -42,6 +44,79 @@ export class LetterASettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Default Colors Section
+		containerEl.createEl('h2', { text: 'Default Colors' });
+
+		const defaultColorsDiv = containerEl.createDiv();
+		const colorsHeader = new Setting(defaultColorsDiv)
+			.setName('Palette')
+			.setDesc('Manage default colors')
+			.setClass('tokens-colors-header');
+
+		if (!this.paletteExpanded) colorsHeader.settingEl.addClass('collapsed');
+
+		const colorsContainer = defaultColorsDiv.createDiv();
+		if (!this.paletteExpanded) colorsContainer.hide();
+
+		colorsHeader.addExtraButton((btn) => {
+			btn.setIcon(this.paletteExpanded ? 'chevron-down' : 'chevron-right')
+				.setTooltip(this.paletteExpanded ? 'Collapse' : 'Expand')
+				.onClick(() => {
+					this.paletteExpanded = !this.paletteExpanded;
+					if (!this.paletteExpanded) {
+						colorsContainer.hide();
+						btn.setIcon('chevron-right');
+						btn.setTooltip('Expand');
+						colorsHeader.settingEl.addClass('collapsed');
+					} else {
+						colorsContainer.show();
+						btn.setIcon('chevron-down');
+						btn.setTooltip('Collapse');
+						colorsHeader.settingEl.removeClass('collapsed');
+					}
+				});
+		});
+
+		this.plugin.settings.defaultColors.forEach((colorValue, index) => {
+			const setting = new Setting(colorsContainer);
+			setting
+				// .setName(`Color ${index + 1}`)
+                // TODO: user a text input to set the name of the color
+                .addText((text) => {
+                    text.setValue(colorValue.name).onChange(async (value) => {
+                        this.plugin.settings.defaultColors[index].name = value;
+                        await this.plugin.saveSettings();
+                    });
+					setting.nameEl.appendChild(text.inputEl);
+                })
+				.addColorPicker((color) => {
+					color.setValue(colorValue.value).onChange(async (value) => {
+						this.plugin.settings.defaultColors[index].value = value;
+						await this.plugin.saveSettings();
+					});
+				})
+				.addExtraButton((btn) => {
+					btn.setIcon('trash')
+						.setTooltip('Remove')
+						.onClick(async () => {
+							this.plugin.settings.defaultColors.splice(index, 1);
+							await this.plugin.saveSettings();
+							this.display();
+						});
+				})
+				.setClass('tokens-colors-element');
+		});
+
+		new Setting(colorsContainer)
+			.setName('Add Color')
+			.addButton((btn) => {
+				btn.setButtonText('Add').onClick(async () => {
+					this.plugin.settings.defaultColors.push(new Colour('New Color', '#ffffff'));
+					await this.plugin.saveSettings();
+					this.display();
+				});
+			})
+			.setClass('tokens-colors-footer');
 
 		
 
