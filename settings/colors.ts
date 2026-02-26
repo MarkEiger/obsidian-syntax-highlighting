@@ -1,0 +1,5 @@
+class ColoursMenu {
+    display() {
+        
+    }
+}

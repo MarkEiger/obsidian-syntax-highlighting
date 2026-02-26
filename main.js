@@ -95,7 +95,6 @@ lexers.push(new TestLexer());
 var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
-    this.paletteExpanded = false;
     this.plugin = plugin;
   }
   display() {
@@ -117,15 +116,12 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h2", { text: "Default Colors" });
     const defaultColorsDiv = containerEl.createDiv();
     const colorsHeader = new import_obsidian.Setting(defaultColorsDiv).setName("Palette").setDesc("Manage default colors").setClass("tokens-colors-header");
-    if (!this.paletteExpanded)
-      colorsHeader.settingEl.addClass("collapsed");
+    colorsHeader.settingEl.addClass("collapsed");
     const colorsContainer = defaultColorsDiv.createDiv();
-    if (!this.paletteExpanded)
-      colorsContainer.hide();
+    colorsContainer.hide();
     colorsHeader.addExtraButton((btn) => {
-      btn.setIcon(this.paletteExpanded ? "chevron-down" : "chevron-right").setTooltip(this.paletteExpanded ? "Collapse" : "Expand").onClick(() => {
-        this.paletteExpanded = !this.paletteExpanded;
-        if (!this.paletteExpanded) {
+      btn.setIcon("chevron-right").setTooltip("Expand").onClick(() => {
+        if (colorsContainer.isShown()) {
           colorsContainer.hide();
           btn.setIcon("chevron-right");
           btn.setTooltip("Expand");

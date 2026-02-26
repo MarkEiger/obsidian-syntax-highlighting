@@ -1,12 +1,25 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { PluginSettingTab, Setting } from 'obsidian';
 import {lexers} from "../lexing/index";
 import LetterAPlugin from '../main';
 import {Colour} from '../main';
 
 // 3. The Settings Tab Class
+
+export class BaseSettingTab extends PluginSettingTab {
+	plugin: LetterAPlugin;
+
+	constructor(app: any, plugin: LetterAPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+	display(): void {
+	}
+}
+
+
+
 export class LetterASettingTab extends PluginSettingTab {
 	plugin: LetterAPlugin;
-	private paletteExpanded = false;
 
 	constructor(app: any, plugin: LetterAPlugin) {
 		super(app, plugin);
@@ -20,6 +33,8 @@ export class LetterASettingTab extends PluginSettingTab {
 
 		containerEl.createEl('h2', { text: 'Highlighter Settings' });
 
+		// these two will have to be deleted (they are here jsut for previous testing till the code migrates to the new architecture)
+		// ---------------------------------------------------------------------------------------------------
 		new Setting(containerEl) // Highlight Color Setting
 			.setName('Highlight Color')
 			.setDesc('Choose the color for the letter "a" inside "a" code blocks.')
@@ -43,6 +58,7 @@ export class LetterASettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+		// ---------------------------------------------------------------------------------------------------
 
 		// Default Colors Section
 		containerEl.createEl('h2', { text: 'Default Colors' });
@@ -53,17 +69,16 @@ export class LetterASettingTab extends PluginSettingTab {
 			.setDesc('Manage default colors')
 			.setClass('tokens-colors-header');
 
-		if (!this.paletteExpanded) colorsHeader.settingEl.addClass('collapsed');
+		colorsHeader.settingEl.addClass('collapsed');
 
 		const colorsContainer = defaultColorsDiv.createDiv();
-		if (!this.paletteExpanded) colorsContainer.hide();
+		colorsContainer.hide();
 
 		colorsHeader.addExtraButton((btn) => {
-			btn.setIcon(this.paletteExpanded ? 'chevron-down' : 'chevron-right')
-				.setTooltip(this.paletteExpanded ? 'Collapse' : 'Expand')
+			btn.setIcon('chevron-right')
+				.setTooltip('Expand')
 				.onClick(() => {
-					this.paletteExpanded = !this.paletteExpanded;
-					if (!this.paletteExpanded) {
+					if (colorsContainer.isShown()) {
 						colorsContainer.hide();
 						btn.setIcon('chevron-right');
 						btn.setTooltip('Expand');
@@ -80,8 +95,6 @@ export class LetterASettingTab extends PluginSettingTab {
 		this.plugin.settings.defaultColors.forEach((colorValue, index) => {
 			const setting = new Setting(colorsContainer);
 			setting
-				// .setName(`Color ${index + 1}`)
-                // TODO: user a text input to set the name of the color
                 .addText((text) => {
                     text.setValue(colorValue.name).onChange(async (value) => {
                         this.plugin.settings.defaultColors[index].name = value;
@@ -131,6 +144,7 @@ export class LetterASettingTab extends PluginSettingTab {
 				.setDesc(`extention for the ${lexer.getExtention()} lexer`)
 				.addToggle(toggle => {
 					toggle.setValue(true);
+					// TODO: check wether false is ever set, cause code looks wierd
 				})
 				.setClass('tokens-colors-header');
 
