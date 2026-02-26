@@ -120,7 +120,8 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
     const colorsContainer = defaultColorsDiv.createDiv();
     colorsContainer.hide();
     colorsHeader.addExtraButton((btn) => {
-      btn.setIcon("chevron-right").setTooltip("Expand").onClick(() => {
+      btn.setIcon("chevron-right").setTooltip("Expand");
+      const toggle = () => {
         if (colorsContainer.isShown()) {
           colorsContainer.hide();
           btn.setIcon("chevron-right");
@@ -132,7 +133,9 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
           btn.setTooltip("Collapse");
           colorsHeader.settingEl.removeClass("collapsed");
         }
-      });
+      };
+      btn.onClick(toggle);
+      colorsHeader.settingEl.addEventListener("dblclick", toggle);
     });
     this.plugin.settings.defaultColors.forEach((colorValue, index) => {
       const setting = new import_obsidian.Setting(colorsContainer);
@@ -172,7 +175,8 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
       const tokensDiv = lexerDiv.createDiv();
       tokensDiv.hide();
       header.addExtraButton((btn) => {
-        btn.setIcon("chevron-right").setTooltip("Expand").onClick(() => {
+        btn.setIcon("chevron-right").setTooltip("Expand");
+        const toggle = () => {
           if (tokensDiv.isShown()) {
             tokensDiv.hide();
             btn.setIcon("chevron-right");
@@ -184,7 +188,9 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
             btn.setTooltip("Collapse");
             header.settingEl.removeClass("collapsed");
           }
-        });
+        };
+        btn.onClick(toggle);
+        header.settingEl.addEventListener("dblclick", toggle);
       });
       let tokens = lexer.getAvailableToeknTypes();
       if (tokens.length === 0)

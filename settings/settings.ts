@@ -75,21 +75,24 @@ export class LetterASettingTab extends PluginSettingTab {
 		colorsContainer.hide();
 
 		colorsHeader.addExtraButton((btn) => {
-			btn.setIcon('chevron-right')
-				.setTooltip('Expand')
-				.onClick(() => {
-					if (colorsContainer.isShown()) {
-						colorsContainer.hide();
-						btn.setIcon('chevron-right');
-						btn.setTooltip('Expand');
-						colorsHeader.settingEl.addClass('collapsed');
-					} else {
-						colorsContainer.show();
-						btn.setIcon('chevron-down');
-						btn.setTooltip('Collapse');
-						colorsHeader.settingEl.removeClass('collapsed');
-					}
-				});
+			btn.setIcon('chevron-right').setTooltip('Expand');
+
+			const toggle = () => {
+				if (colorsContainer.isShown()) {
+					colorsContainer.hide();
+					btn.setIcon('chevron-right');
+					btn.setTooltip('Expand');
+					colorsHeader.settingEl.addClass('collapsed');
+				} else {
+					colorsContainer.show();
+					btn.setIcon('chevron-down');
+					btn.setTooltip('Collapse');
+					colorsHeader.settingEl.removeClass('collapsed');
+				}
+			};
+
+			btn.onClick(toggle);
+			colorsHeader.settingEl.addEventListener('dblclick', toggle);
 		});
 
 		this.plugin.settings.defaultColors.forEach((colorValue, index) => {
@@ -154,21 +157,24 @@ export class LetterASettingTab extends PluginSettingTab {
 			tokensDiv.hide();
 
 			header.addExtraButton((btn) => {
-				btn.setIcon('chevron-right')
-					.setTooltip('Expand')
-					.onClick(() => {
-						if (tokensDiv.isShown()) {
-							tokensDiv.hide();
-							btn.setIcon('chevron-right');
-							btn.setTooltip('Expand');
-							header.settingEl.addClass('collapsed');
-						} else {
-							tokensDiv.show();
-							btn.setIcon('chevron-down');
-							btn.setTooltip('Collapse');
-							header.settingEl.removeClass('collapsed');
-						}
-					});
+				btn.setIcon('chevron-right').setTooltip('Expand');
+
+				const toggle = () => {
+					if (tokensDiv.isShown()) {
+						tokensDiv.hide();
+						btn.setIcon('chevron-right');
+						btn.setTooltip('Expand');
+						header.settingEl.addClass('collapsed');
+					} else {
+						tokensDiv.show();
+						btn.setIcon('chevron-down');
+						btn.setTooltip('Collapse');
+						header.settingEl.removeClass('collapsed');
+					}
+				};
+
+				btn.onClick(toggle);
+				header.settingEl.addEventListener('dblclick', toggle);
 			});
 
 			let tokens = lexer.getAvailableToeknTypes();
