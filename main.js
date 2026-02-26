@@ -92,27 +92,13 @@ var TestLexer = class {
 lexers.push(new TestLexer());
 
 // settings/settings.ts
-var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
-  constructor(app, plugin) {
-    super(app, plugin);
+var PaletteSettings = class {
+  constructor(plugin, containerEl) {
     this.plugin = plugin;
+    this.containerEl = containerEl;
   }
   display() {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.createEl("h2", { text: "Highlighter Settings" });
-    new import_obsidian.Setting(containerEl).setName("Highlight Color").setDesc('Choose the color for the letter "a" inside "a" code blocks.').addColorPicker(
-      (color) => color.setValue(this.plugin.settings.highlightColor).onChange(async (value) => {
-        this.plugin.settings.highlightColor = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for. (regex syntax)").addText(
-      (text) => text.setValue(this.plugin.settings.codeExtension).onChange(async (value) => {
-        this.plugin.settings.codeExtension = value;
-        await this.plugin.saveSettings();
-      })
-    );
+    const { containerEl, plugin } = this;
     containerEl.createEl("h2", { text: "Default Colors" });
     const defaultColorsDiv = containerEl.createDiv();
     const colorsHeader = new import_obsidian.Setting(defaultColorsDiv).setName("Palette").setDesc("Manage default colors").setClass("tokens-colors-header");
@@ -137,34 +123,48 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
       btn.onClick(toggle);
       colorsHeader.settingEl.addEventListener("dblclick", toggle);
     });
-    this.plugin.settings.defaultColors.forEach((colorValue, index) => {
-      const setting = new import_obsidian.Setting(colorsContainer);
-      setting.addText((text) => {
-        text.setValue(colorValue.name).onChange(async (value) => {
-          this.plugin.settings.defaultColors[index].name = value;
-          await this.plugin.saveSettings();
-        });
-        setting.nameEl.appendChild(text.inputEl);
-      }).addColorPicker((color) => {
-        color.setValue(colorValue.value).onChange(async (value) => {
-          this.plugin.settings.defaultColors[index].value = value;
-          await this.plugin.saveSettings();
-        });
-      }).addExtraButton((btn) => {
-        btn.setIcon("trash").setTooltip("Remove").onClick(async () => {
-          this.plugin.settings.defaultColors.splice(index, 1);
-          await this.plugin.saveSettings();
-          this.display();
-        });
-      }).setClass("tokens-colors-element");
-    });
+    const colorListContainer = colorsContainer.createDiv();
+    const renderColors = () => {
+      colorListContainer.empty();
+      plugin.settings.defaultColors.forEach((colorValue, index) => {
+        const setting = new import_obsidian.Setting(colorListContainer);
+        setting.addText((text) => {
+          text.setValue(colorValue.name).onChange(async (value) => {
+            plugin.settings.defaultColors[index].name = value;
+            await plugin.saveSettings();
+          });
+          setting.nameEl.appendChild(text.inputEl);
+        }).addColorPicker((color) => {
+          color.setValue(colorValue.value).onChange(async (value) => {
+            plugin.settings.defaultColors[index].value = value;
+            await plugin.saveSettings();
+          });
+        }).addExtraButton((btn) => {
+          btn.setIcon("trash").setTooltip("Remove").onClick(async () => {
+            plugin.settings.defaultColors.splice(index, 1);
+            await plugin.saveSettings();
+            renderColors();
+          });
+        }).setClass("tokens-colors-element");
+      });
+    };
+    renderColors();
     new import_obsidian.Setting(colorsContainer).setName("Add Color").addButton((btn) => {
       btn.setButtonText("Add").onClick(async () => {
-        this.plugin.settings.defaultColors.push(new Colour("New Color", "#ffffff"));
-        await this.plugin.saveSettings();
-        this.display();
+        plugin.settings.defaultColors.push(new Colour("New Color", "#ffffff"));
+        await plugin.saveSettings();
+        renderColors();
       });
     }).setClass("tokens-colors-footer");
+  }
+};
+var LexerSettings = class {
+  constructor(plugin, containerEl) {
+    this.plugin = plugin;
+    this.containerEl = containerEl;
+  }
+  display() {
+    const { containerEl } = this;
     containerEl.createEl("h1", { text: "Lexers" });
     for (const lexer of lexers) {
       const lexerDiv = containerEl.createDiv();
@@ -202,6 +202,31 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
       }
       new import_obsidian.Setting(tokensDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
     }
+  }
+};
+var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Highlighter Settings" });
+    new import_obsidian.Setting(containerEl).setName("Highlight Color").setDesc('Choose the color for the letter "a" inside "a" code blocks.').addColorPicker(
+      (color) => color.setValue(this.plugin.settings.highlightColor).onChange(async (value) => {
+        this.plugin.settings.highlightColor = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for. (regex syntax)").addText(
+      (text) => text.setValue(this.plugin.settings.codeExtension).onChange(async (value) => {
+        this.plugin.settings.codeExtension = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new PaletteSettings(this.plugin, containerEl).display();
+    new LexerSettings(this.plugin, containerEl).display();
   }
 };
 

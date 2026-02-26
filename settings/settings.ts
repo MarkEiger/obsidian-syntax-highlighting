@@ -3,62 +3,11 @@ import {lexers} from "../lexing/index";
 import LetterAPlugin from '../main';
 import {Colour} from '../main';
 
-// 3. The Settings Tab Class
+class PaletteSettings {
+	constructor(private plugin: LetterAPlugin, private containerEl: HTMLElement) {}
 
-export class BaseSettingTab extends PluginSettingTab {
-	plugin: LetterAPlugin;
-
-	constructor(app: any, plugin: LetterAPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-	display(): void {
-	}
-}
-
-
-
-export class LetterASettingTab extends PluginSettingTab {
-	plugin: LetterAPlugin;
-
-	constructor(app: any, plugin: LetterAPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		// if the ai slop fails, just analyze this and write my own code
-		const { containerEl } = this;
-		containerEl.empty();
-
-		containerEl.createEl('h2', { text: 'Highlighter Settings' });
-
-		// these two will have to be deleted (they are here jsut for previous testing till the code migrates to the new architecture)
-		// ---------------------------------------------------------------------------------------------------
-		new Setting(containerEl) // Highlight Color Setting
-			.setName('Highlight Color')
-			.setDesc('Choose the color for the letter "a" inside "a" code blocks.')
-			.addColorPicker((color) =>
-				color
-					.setValue(this.plugin.settings.highlightColor)
-					.onChange(async (value) => {
-						this.plugin.settings.highlightColor = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl) // Code Extension Setting
-			.setName('Code Extension')
-			.setDesc('The code block extension to look for. (regex syntax)')
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.codeExtension)
-					.onChange(async (value) => {
-						this.plugin.settings.codeExtension = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		// ---------------------------------------------------------------------------------------------------
+	display() {
+		const { containerEl, plugin } = this;
 
 		// Default Colors Section
 		containerEl.createEl('h2', { text: 'Default Colors' });
@@ -95,47 +44,59 @@ export class LetterASettingTab extends PluginSettingTab {
 			colorsHeader.settingEl.addEventListener('dblclick', toggle);
 		});
 
-		this.plugin.settings.defaultColors.forEach((colorValue, index) => {
-			const setting = new Setting(colorsContainer);
-			setting
-                .addText((text) => {
-                    text.setValue(colorValue.name).onChange(async (value) => {
-                        this.plugin.settings.defaultColors[index].name = value;
-                        await this.plugin.saveSettings();
-                    });
-					setting.nameEl.appendChild(text.inputEl);
-                })
-				.addColorPicker((color) => {
-					color.setValue(colorValue.value).onChange(async (value) => {
-						this.plugin.settings.defaultColors[index].value = value;
-						await this.plugin.saveSettings();
-					});
-				})
-				.addExtraButton((btn) => {
-					btn.setIcon('trash')
-						.setTooltip('Remove')
-						.onClick(async () => {
-							this.plugin.settings.defaultColors.splice(index, 1);
-							await this.plugin.saveSettings();
-							this.display();
+		const colorListContainer = colorsContainer.createDiv();
+
+		const renderColors = () => {
+			colorListContainer.empty();
+			plugin.settings.defaultColors.forEach((colorValue, index) => {
+				const setting = new Setting(colorListContainer);
+				setting
+					.addText((text) => {
+						text.setValue(colorValue.name).onChange(async (value) => {
+							plugin.settings.defaultColors[index].name = value;
+							await plugin.saveSettings();
 						});
-				})
-				.setClass('tokens-colors-element');
-		});
+						setting.nameEl.appendChild(text.inputEl);
+					})
+					.addColorPicker((color) => {
+						color.setValue(colorValue.value).onChange(async (value) => {
+							plugin.settings.defaultColors[index].value = value;
+							await plugin.saveSettings();
+						});
+					})
+					.addExtraButton((btn) => {
+						btn.setIcon('trash')
+							.setTooltip('Remove')
+							.onClick(async () => {
+								plugin.settings.defaultColors.splice(index, 1);
+								await plugin.saveSettings();
+								renderColors();
+							});
+					})
+					.setClass('tokens-colors-element');
+			});
+		};
+
+		renderColors();
 
 		new Setting(colorsContainer)
 			.setName('Add Color')
 			.addButton((btn) => {
 				btn.setButtonText('Add').onClick(async () => {
-					this.plugin.settings.defaultColors.push(new Colour('New Color', '#ffffff'));
-					await this.plugin.saveSettings();
-					this.display();
+					plugin.settings.defaultColors.push(new Colour('New Color', '#ffffff'));
+					await plugin.saveSettings();
+					renderColors();
 				});
 			})
 			.setClass('tokens-colors-footer');
+	}
+}
 
-		
+class LexerSettings {
+	constructor(private plugin: LetterAPlugin, private containerEl: HTMLElement) {}
 
+	display() {
+		const { containerEl } = this;
 		// Lexer Settings Section
 		containerEl.createEl('h1', { text: 'Lexers' });
 
@@ -196,5 +157,53 @@ export class LetterASettingTab extends PluginSettingTab {
 				.addColorPicker((color) => color.setValue('#ff0000'))
 				.setClass('tokens-colors-footer');
 		}
+	}
+}
+
+// 3. The Settings Tab Class
+export class LetterASettingTab extends PluginSettingTab {
+	plugin: LetterAPlugin;
+
+	constructor(app: any, plugin: LetterAPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display(): void {
+		// if the ai slop fails, just analyze this and write my own code
+		const { containerEl } = this;
+		containerEl.empty();
+
+		containerEl.createEl('h2', { text: 'Highlighter Settings' });
+
+		// these two will have to be deleted (they are here jsut for previous testing till the code migrates to the new architecture)
+		// ---------------------------------------------------------------------------------------------------
+		new Setting(containerEl) // Highlight Color Setting
+			.setName('Highlight Color')
+			.setDesc('Choose the color for the letter "a" inside "a" code blocks.')
+			.addColorPicker((color) =>
+				color
+					.setValue(this.plugin.settings.highlightColor)
+					.onChange(async (value) => {
+						this.plugin.settings.highlightColor = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl) // Code Extension Setting
+			.setName('Code Extension')
+			.setDesc('The code block extension to look for. (regex syntax)')
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.codeExtension)
+					.onChange(async (value) => {
+						this.plugin.settings.codeExtension = value;
+						await this.plugin.saveSettings();
+					})
+			);
+		// ---------------------------------------------------------------------------------------------------
+
+		new PaletteSettings(this.plugin, containerEl).display();
+		new LexerSettings(this.plugin, containerEl).display();
 	}
 }
