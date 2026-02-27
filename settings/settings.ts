@@ -1,164 +1,7 @@
 import { PluginSettingTab, Setting } from 'obsidian';
-import {lexers} from "../lexing/index";
 import LetterAPlugin from '../main';
-import {Colour} from '../main';
-
-class PaletteSettings {
-	constructor(private plugin: LetterAPlugin, private containerEl: HTMLElement) {}
-
-	display() {
-		const { containerEl, plugin } = this;
-
-		// Default Colors Section
-		containerEl.createEl('h2', { text: 'Default Colors' });
-
-		const defaultColorsDiv = containerEl.createDiv();
-		const colorsHeader = new Setting(defaultColorsDiv)
-			.setName('Palette')
-			.setDesc('Manage default colors')
-			.setClass('tokens-colors-header');
-
-		colorsHeader.settingEl.addClass('collapsed');
-
-		const colorsContainer = defaultColorsDiv.createDiv();
-		colorsContainer.hide();
-
-		colorsHeader.addExtraButton((btn) => {
-			btn.setIcon('chevron-right').setTooltip('Expand');
-
-			const toggle = () => {
-				if (colorsContainer.isShown()) {
-					colorsContainer.hide();
-					btn.setIcon('chevron-right');
-					btn.setTooltip('Expand');
-					colorsHeader.settingEl.addClass('collapsed');
-				} else {
-					colorsContainer.show();
-					btn.setIcon('chevron-down');
-					btn.setTooltip('Collapse');
-					colorsHeader.settingEl.removeClass('collapsed');
-				}
-			};
-
-			btn.onClick(toggle);
-			colorsHeader.settingEl.addEventListener('dblclick', toggle);
-		});
-
-		const colorListContainer = colorsContainer.createDiv();
-
-		const renderColors = () => {
-			colorListContainer.empty();
-			plugin.settings.defaultColors.forEach((colorValue, index) => {
-				const setting = new Setting(colorListContainer);
-				setting
-					.addText((text) => {
-						text.setValue(colorValue.name).onChange(async (value) => {
-							plugin.settings.defaultColors[index].name = value;
-							await plugin.saveSettings();
-						});
-						setting.nameEl.appendChild(text.inputEl);
-					})
-					.addColorPicker((color) => {
-						color.setValue(colorValue.value).onChange(async (value) => {
-							plugin.settings.defaultColors[index].value = value;
-							await plugin.saveSettings();
-						});
-					})
-					.addExtraButton((btn) => {
-						btn.setIcon('trash')
-							.setTooltip('Remove')
-							.onClick(async () => {
-								plugin.settings.defaultColors.splice(index, 1);
-								await plugin.saveSettings();
-								renderColors();
-							});
-					})
-					.setClass('tokens-colors-element');
-			});
-		};
-
-		renderColors();
-
-		new Setting(colorsContainer)
-			.setName('Add Color')
-			.addButton((btn) => {
-				btn.setButtonText('Add').onClick(async () => {
-					plugin.settings.defaultColors.push(new Colour('New Color', '#ffffff'));
-					await plugin.saveSettings();
-					renderColors();
-				});
-			})
-			.setClass('tokens-colors-footer');
-	}
-}
-
-class LexerSettings {
-	constructor(private plugin: LetterAPlugin, private containerEl: HTMLElement) {}
-
-	display() {
-		const { containerEl } = this;
-		// Lexer Settings Section
-		containerEl.createEl('h1', { text: 'Lexers' });
-
-		for (const lexer of lexers) {
-			const lexerDiv = containerEl.createDiv();
-
-			const header = new Setting(lexerDiv)
-				.setName(lexer.getExtention())
-				.setDesc(`extention for the ${lexer.getExtention()} lexer`)
-				.addToggle(toggle => {
-					toggle.setValue(true);
-					// TODO: check wether false is ever set, cause code looks wierd
-				})
-				.setClass('tokens-colors-header');
-
-			header.settingEl.addClass('collapsed');
-
-			const tokensDiv = lexerDiv.createDiv();
-			tokensDiv.hide();
-
-			header.addExtraButton((btn) => {
-				btn.setIcon('chevron-right').setTooltip('Expand');
-
-				const toggle = () => {
-					if (tokensDiv.isShown()) {
-						tokensDiv.hide();
-						btn.setIcon('chevron-right');
-						btn.setTooltip('Expand');
-						header.settingEl.addClass('collapsed');
-					} else {
-						tokensDiv.show();
-						btn.setIcon('chevron-down');
-						btn.setTooltip('Collapse');
-						header.settingEl.removeClass('collapsed');
-					}
-				};
-
-				btn.onClick(toggle);
-				header.settingEl.addEventListener('dblclick', toggle);
-			});
-
-			let tokens = lexer.getAvailableToeknTypes();
-			if (tokens.length === 0) continue;
-
-			const last_token = tokens[tokens.length - 1];
-			// TODO: verufy there are tokens
-			tokens = tokens.slice(0, -1); // remove the last token since it will be used as the header for the section of the tokens colors, and i dont want it to be colored like the rest of the tokens
-			
-			// Token Color Settings
-			for (const token of tokens) {
-				new Setting(tokensDiv)
-					.setName(`${token} Color`)
-					.addColorPicker((color) => color.setValue('#ff0000'))
-					.setClass('tokens-colors-element');
-			}
-			new Setting(tokensDiv)
-				.setName(`${last_token} Color`)
-				.addColorPicker((color) => color.setValue('#ff0000'))
-				.setClass('tokens-colors-footer');
-		}
-	}
-}
+import { PaletteSettings } from './pallet';
+import { LexerSettings } from './lexers';
 
 // 3. The Settings Tab Class
 export class LetterASettingTab extends PluginSettingTab {
@@ -170,7 +13,6 @@ export class LetterASettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		// if the ai slop fails, just analyze this and write my own code
 		const { containerEl } = this;
 		containerEl.empty();
 
@@ -203,6 +45,8 @@ export class LetterASettingTab extends PluginSettingTab {
 			);
 		// ---------------------------------------------------------------------------------------------------
 
+		// TODO: rewrite this in a way that new Settings are easy to add
+		// just like lexers are
 		new PaletteSettings(this.plugin, containerEl).display();
 		new LexerSettings(this.plugin, containerEl).display();
 	}

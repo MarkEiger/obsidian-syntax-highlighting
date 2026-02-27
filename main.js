@@ -28,75 +28,26 @@ __export(main_exports, {
   default: () => LetterAPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian2 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
 
 // settings/settings.ts
+var import_obsidian3 = require("obsidian");
+
+// settings/pallet.ts
 var import_obsidian = require("obsidian");
 
-// lexing/lexers/index.ts
-var lexers_exports = {};
-__export(lexers_exports, {
-  ExampleLexer: () => ExampleLexer,
-  TestLexer: () => TestLexer
-});
-
-// lexing/api.ts
-var lexers = [];
-
-// lexing/lexers/example.ts
-var ExampleLexer = class {
-  getExtention() {
-    return "example";
-  }
-  getAvailableToeknTypes() {
-    return ["example", "example2"];
-  }
-  tokenize(text) {
-    const target = /\w+/gi;
-    let match;
-    const tokens = [];
-    while ((match = target.exec(text)) !== null) {
-      tokens.push({
-        text: match[0],
-        type: "example"
-      });
-    }
-    return tokens;
-  }
-};
-lexers.push(new ExampleLexer());
-
-// lexing/lexers/test.ts
-var TestLexer = class {
-  getExtention() {
-    return "test";
-  }
-  getAvailableToeknTypes() {
-    return ["test", "test2"];
-  }
-  tokenize(text) {
-    const target = /\w+/gi;
-    let match;
-    const tokens = [];
-    while ((match = target.exec(text)) !== null) {
-      tokens.push({
-        text: match[0],
-        type: "test"
-      });
-    }
-    return tokens;
-  }
-};
-lexers.push(new TestLexer());
-
-// settings/settings.ts
-var PaletteSettings = class {
+// settings/base_settings.ts
+var BaseSettings = class {
   constructor(plugin, containerEl) {
     this.plugin = plugin;
     this.containerEl = containerEl;
   }
+};
+
+// settings/pallet.ts
+var PaletteSettings = class extends BaseSettings {
   display() {
     const { containerEl, plugin } = this;
     containerEl.createEl("h2", { text: "Default Colors" });
@@ -158,17 +109,74 @@ var PaletteSettings = class {
     }).setClass("tokens-colors-footer");
   }
 };
-var LexerSettings = class {
-  constructor(plugin, containerEl) {
-    this.plugin = plugin;
-    this.containerEl = containerEl;
+
+// settings/lexers.ts
+var import_obsidian2 = require("obsidian");
+
+// lexing/lexers/index.ts
+var lexers_exports = {};
+__export(lexers_exports, {
+  ExampleLexer: () => ExampleLexer,
+  TestLexer: () => TestLexer
+});
+
+// lexing/api.ts
+var lexers = [];
+
+// lexing/lexers/example.ts
+var ExampleLexer = class {
+  getExtention() {
+    return "example";
   }
+  getAvailableToeknTypes() {
+    return ["example", "example2"];
+  }
+  tokenize(text) {
+    const target = /\w+/gi;
+    let match;
+    const tokens = [];
+    while ((match = target.exec(text)) !== null) {
+      tokens.push({
+        text: match[0],
+        type: "example"
+      });
+    }
+    return tokens;
+  }
+};
+lexers.push(new ExampleLexer());
+
+// lexing/lexers/test.ts
+var TestLexer = class {
+  getExtention() {
+    return "test";
+  }
+  getAvailableToeknTypes() {
+    return ["test", "test2"];
+  }
+  tokenize(text) {
+    const target = /\w+/gi;
+    let match;
+    const tokens = [];
+    while ((match = target.exec(text)) !== null) {
+      tokens.push({
+        text: match[0],
+        type: "test"
+      });
+    }
+    return tokens;
+  }
+};
+lexers.push(new TestLexer());
+
+// settings/lexers.ts
+var LexerSettings = class extends BaseSettings {
   display() {
     const { containerEl } = this;
     containerEl.createEl("h1", { text: "Lexers" });
     for (const lexer of lexers) {
       const lexerDiv = containerEl.createDiv();
-      const header = new import_obsidian.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).addToggle((toggle) => {
+      const header = new import_obsidian2.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).addToggle((toggle) => {
         toggle.setValue(true);
       }).setClass("tokens-colors-header");
       header.settingEl.addClass("collapsed");
@@ -198,13 +206,15 @@ var LexerSettings = class {
       const last_token = tokens[tokens.length - 1];
       tokens = tokens.slice(0, -1);
       for (const token of tokens) {
-        new import_obsidian.Setting(tokensDiv).setName(`${token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-element");
+        new import_obsidian2.Setting(tokensDiv).setName(`${token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-element");
       }
-      new import_obsidian.Setting(tokensDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
+      new import_obsidian2.Setting(tokensDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
     }
   }
 };
-var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
+
+// settings/settings.ts
+var LetterASettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -213,13 +223,13 @@ var LetterASettingTab = class extends import_obsidian.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Highlighter Settings" });
-    new import_obsidian.Setting(containerEl).setName("Highlight Color").setDesc('Choose the color for the letter "a" inside "a" code blocks.').addColorPicker(
+    new import_obsidian3.Setting(containerEl).setName("Highlight Color").setDesc('Choose the color for the letter "a" inside "a" code blocks.').addColorPicker(
       (color) => color.setValue(this.plugin.settings.highlightColor).onChange(async (value) => {
         this.plugin.settings.highlightColor = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for. (regex syntax)").addText(
+    new import_obsidian3.Setting(containerEl).setName("Code Extension").setDesc("The code block extension to look for. (regex syntax)").addText(
       (text) => text.setValue(this.plugin.settings.codeExtension).onChange(async (value) => {
         this.plugin.settings.codeExtension = value;
         await this.plugin.saveSettings();
@@ -251,7 +261,7 @@ var DEFAULT_SETTINGS = {
     new Colour("Magenta", "#ff00ff")
   ]
 };
-var LetterAPlugin = class extends import_obsidian2.Plugin {
+var LetterAPlugin = class extends import_obsidian4.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerEditorExtension(this.buildEditorExtension());
