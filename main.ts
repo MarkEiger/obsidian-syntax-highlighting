@@ -10,6 +10,9 @@ import {
 } from '@codemirror/view';
 
 import { LetterASettingTab } from 'settings/settings';
+import { Lexer } from 'lexing/api';
+import { lexers } from 'lexing';
+
 
 export class Colour{
 	name: string;
@@ -24,13 +27,15 @@ export class Colour{
 interface LetterAPluginSettings {
 	highlightColor: string;
 	codeExtension: string; // Future setting for code block extension (e.g., "a")
-	defaultColors: Colour[];
+	coloursPallete: Colour[];
+	lexers: Lexer[];
 }
 
+// there is a bug, lexers aren't initialized yet when this is created, so it is empty
 const DEFAULT_SETTINGS: LetterAPluginSettings = {
 	highlightColor: '#ff0000', // Default Red
 	codeExtension: 'customCode', // Default code block extension to look for
-	defaultColors: [
+	coloursPallete: [
 		new Colour('Red', '#ff0000'),
 		new Colour('Green', '#00ff00'),
 		new Colour('Blue', '#0000ff'),
@@ -38,6 +43,8 @@ const DEFAULT_SETTINGS: LetterAPluginSettings = {
 		new Colour('Cyan', '#00ffff'),
 		new Colour('Magenta', '#ff00ff')
 	],
+	lexers: lexers // TODO: complicate this a little, instead of just taking the lexers from the array, 
+	// create new instances of them here, to be able to set their default value unless they are serialzied from data.json
 };
 
 // 2. The Main Plugin Class
@@ -58,10 +65,12 @@ export default class LetterAPlugin extends Plugin {
 	}
 
 	async loadSettings() {
+		console.log("loading data")
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
 
 	async saveSettings() {
+		console.log("Saving settings:", this.settings);
 		await this.saveData(this.settings);
 		this.updateColorStyle();
 		// Force a refresh of the editor to apply new colors immediately
@@ -118,16 +127,19 @@ export default class LetterAPlugin extends Plugin {
 						while ((code_block = code_block_regex.exec(file_text)) !== null) {
 							const start_of_code_block = from + code_block.index + code_block[HEADER_ID].length; // Position of the start of the text inside the code block
 							const textInsideCodeBlock = code_block[BLOCK_TEXT_ID]; // The second capture group contains the text inside the code block
-							const target_regex = /\w+/gi;
+							const target_regex = /ab/gi;
 							let match;
 							while ((match = target_regex.exec(textInsideCodeBlock)) !== null) {
 								const match_content = match[0];
 								const matchPos = start_of_code_block + match.index;
-								const replaceDecoration = Decoration.replace({
-									widget: new BWidget(match_content),
-								});
-								builder.add(matchPos, matchPos + match_content.length, replaceDecoration);
-
+								// TOOD: maybe separate it and colour 
+								// it letter by letter to prevent bugs
+								for (let i = 0; i < match_content.length; i++) {
+									const replaceDecoration = Decoration.replace({
+										widget: new BWidget(match_content[i]),
+									});
+									builder.add(matchPos + i, matchPos + i + 1, replaceDecoration);
+								}
 							}
 						}
 					}

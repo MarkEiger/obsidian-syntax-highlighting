@@ -1,7 +1,7 @@
 import { PluginSettingTab, Setting } from 'obsidian';
 import LetterAPlugin from '../main';
-import { PaletteSettings } from './pallet';
-import { LexerSettings } from './lexers';
+import { PaletteSettingsTab } from './pallet';
+import { LexerSettingsTab } from './lexers';
 
 // 3. The Settings Tab Class
 export class LetterASettingTab extends PluginSettingTab {
@@ -47,7 +47,7 @@ export class LetterASettingTab extends PluginSettingTab {
 
 		// TODO: rewrite this in a way that new Settings are easy to add
 		// just like lexers are
-		new PaletteSettings(this.plugin, containerEl).display();
-		new LexerSettings(this.plugin, containerEl).display();
+		new PaletteSettingsTab(this.plugin, containerEl).display();
+		new LexerSettingsTab(this.plugin, containerEl).display();
 	}
 }

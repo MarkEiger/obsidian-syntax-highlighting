@@ -1,7 +1,7 @@
 {
   "highlightColor": "#ff0000",
   "codeExtension": "customCode",
-  "defaultColors": [
+  "coloursPallete": [
     {
       "name": "Red",
       "value": "#ff0000"
@@ -25,10 +25,50 @@
     {
       "name": "Magenta",
       "value": "#ff00ff"
+    }
+  ],
+  "lexers": [
+    {
+      "defaultExtension": "example",
+      "defaultColourMappings": [
+        {
+          "tokenType": "example",
+          "color": "#ff0000"
+        }
+      ],
+      "extension": "example",
+      "colourMappings": [
+        {
+          "tokenType": "example",
+          "color": "#ff0000"
+        }
+      ],
+      "enabled": true
     },
     {
-      "name": "Orange",
-      "value": "#e06500"
+      "defaultExtension": "test",
+      "defaultColourMappings": [
+        {
+          "tokenType": "test",
+          "color": "#2b00ff"
+        },
+        {
+          "tokenType": "test2",
+          "color": "#00ff00"
+        }
+      ],
+      "extension": "test2",
+      "colourMappings": [
+        {
+          "tokenType": "test",
+          "color": "#00ff00"
+        },
+        {
+          "tokenType": "test2",
+          "color": "#ff0000"
+        }
+      ],
+      "enabled": true
     }
   ]
 }

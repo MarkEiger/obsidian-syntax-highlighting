@@ -1,25 +1,39 @@
-import { Setting } from "obsidian";
-import { lexers } from "../lexing/index";
-import { BaseSettings } from "./base_settings";
+import { ColorComponent, Setting } from "obsidian";
+import { BaseSettingsTab } from "./base_settings";
+import { ColourMapping } from "lexing/api";
 
-export class LexerSettings extends BaseSettings {
+export class LexerSettingsTab extends BaseSettingsTab {
 	display() {
-		const { containerEl } = this;
+		const { containerEl, plugin } = this;
 		// Lexer Settings Section
-		containerEl.createEl('h1', { text: 'Lexers' });
+		containerEl.createEl('h2', { text: 'Lexers Settings' });
 
-		for (const lexer of lexers) {
+		// take example from this
+		// plugin.settings.coloursPallete.forEach((colorValue, index) => {
+
+		plugin.settings.lexers.forEach((lexer, index) => {
 			const lexerDiv = containerEl.createDiv();
-
 			const header = new Setting(lexerDiv)
-				.setName(lexer.getExtention())
-				.setDesc(`extention for the ${lexer.getExtention()} lexer`)
+				.setName(lexer.extension)			
+				.addText(text => {
+					const container = text.inputEl.parentElement;
+					if (container) {
+						container.prepend(createSpan({ text: 'Code-Block Extension: ' }));
+					}
+					text.setValue(lexer.extension).onChange(async (value) => {
+						plugin.settings.lexers[index].extension = value
+						await plugin.saveSettings();
+					});
+				})
 				.addToggle(toggle => {
-					toggle.setValue(true);
+					toggle.setValue(lexer.enabled).onChange(async value => {
+						plugin.settings.lexers[index].enabled = value;
+						await this.plugin.saveSettings();
+					});
 					// TODO: check wether false is ever set, cause code looks wierd
 				})
-				.setClass('tokens-colors-header');
-
+				.setClass('tokens-colors-header');	
+			
 			header.settingEl.addClass('collapsed');
 
 			const tokensDiv = lexerDiv.createDiv();
@@ -43,27 +57,47 @@ export class LexerSettings extends BaseSettings {
 				};
 
 				btn.onClick(toggle);
-				header.settingEl.addEventListener('dblclick', toggle);
+				header.settingEl.addEventListener('dblclick', (event: MouseEvent) => {
+					// 3. Identify the element that was clicked
+					const target = event.target as HTMLElement;
+
+					// Ignore double-clicks on inputs or toggles
+					if (target.closest('input, .checkbox-container, .extra-setting-button')) {
+						return;
+					}
+					toggle();
+				});
 			});
 
-			let tokens = lexer.getAvailableToeknTypes();
-			if (tokens.length === 0) continue;
-
-			const last_token = tokens[tokens.length - 1];
-			// TODO: verufy there are tokens
-			tokens = tokens.slice(0, -1); // remove the last token since it will be used as the header for the section of the tokens colors, and i dont want it to be colored like the rest of the tokens
-			
-			// Token Color Settings
-			for (const token of tokens) {
+			let mappings: ColourMapping[] = lexer.colourMappings
+			mappings.forEach((mapping, index) => {
+				let colorComp: ColorComponent;
+				let cssClass = 'tokens-colors-element';
+				if (index === mappings.length - 1){
+					cssClass = 'tokens-colors-footer';
+				}
 				new Setting(tokensDiv)
-					.setName(`${token} Color`)
-					.addColorPicker((color) => color.setValue('#ff0000'))
-					.setClass('tokens-colors-element');
-			}
-			new Setting(tokensDiv)
-				.setName(`${last_token} Color`)
-				.addColorPicker((color) => color.setValue('#ff0000'))
-				.setClass('tokens-colors-footer');
-		}
+					.setName(`${mapping.tokenType} Color`)
+					.setClass(cssClass)
+					.addDropdown(dropdown => {
+						for (const option of this.plugin.settings.coloursPallete) {
+							dropdown.addOption(option.value, option.name);
+						}
+						dropdown.addOption('custom', 'Custom Color');
+						dropdown.setValue(mapping.color);
+						dropdown.onChange(async value => {
+							lexer.colourMappings[index].color = value;
+							colorComp.setValue(value);
+							await this.plugin.saveSettings();
+						});
+					})
+					.addColorPicker(color => {
+						colorComp = color;
+						color
+						.setValue(mapping.color)
+						.setDisabled(true)
+					});
+			});
+		});
 	}
 }

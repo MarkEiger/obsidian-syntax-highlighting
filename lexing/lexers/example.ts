@@ -1,12 +1,12 @@
-import {Lexer, Token, lexers} from "../api";
+import {ColourMapping, Lexer, LexerStaticDefaults, Token, lexers} from "../api";
 
-export class ExampleLexer implements Lexer{
-    getExtention(): string {
-        return "example";
-    }
-    getAvailableToeknTypes(): string[] {
-        return ["example", "example2"];
-    }
+export class ExampleLexer extends Lexer implements LexerStaticDefaults{
+    static defaultExtension: string = "example";
+    static defaultColourMappings: ColourMapping[] = [
+        {tokenType: "example", color: "#ff0000"}
+    ];
+
+
     tokenize(text: string): Token[] {
         const target = /\w+/gi;
         let match;

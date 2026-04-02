@@ -1,8 +1,8 @@
 import { Setting } from 'obsidian';
 import { Colour } from '../main';
-import { BaseSettings } from './base_settings';
+import { BaseSettingsTab } from './base_settings';
 
-export class PaletteSettings extends BaseSettings {
+export class PaletteSettingsTab extends BaseSettingsTab {
     display() {
         const { containerEl, plugin } = this;
 
@@ -38,26 +38,36 @@ export class PaletteSettings extends BaseSettings {
             };
 
             btn.onClick(toggle);
-            colorsHeader.settingEl.addEventListener('dblclick', toggle);
+            colorsHeader.settingEl.addEventListener('dblclick', (event: MouseEvent) => {
+					// 3. Identify the element that was clicked
+					const target = event.target as HTMLElement;
+
+					// Ignore double-clicks on inputs or toggles
+					if (target.closest('input, .checkbox-container, .extra-setting-button')) {
+						return;
+					}
+					toggle();
+				}
+            );
         });
 
         const colorListContainer = colorsContainer.createDiv();
 
         const renderColors = () => {
             colorListContainer.empty();
-            plugin.settings.defaultColors.forEach((colorValue, index) => {
+            plugin.settings.coloursPallete.forEach((colorValue, index) => {
                 const setting = new Setting(colorListContainer);
                 setting
                     .addText((text) => {
                         text.setValue(colorValue.name).onChange(async (value) => {
-                            plugin.settings.defaultColors[index].name = value;
+                            plugin.settings.coloursPallete[index].name = value;
                             await plugin.saveSettings();
                         });
                         setting.nameEl.appendChild(text.inputEl);
                     })
                     .addColorPicker((color) => {
                         color.setValue(colorValue.value).onChange(async (value) => {
-                            plugin.settings.defaultColors[index].value = value;
+                            plugin.settings.coloursPallete[index].value = value;
                             await plugin.saveSettings();
                         });
                     })
@@ -65,7 +75,7 @@ export class PaletteSettings extends BaseSettings {
                         btn.setIcon('trash')
                             .setTooltip('Remove')
                             .onClick(async () => {
-                                plugin.settings.defaultColors.splice(index, 1);
+                                plugin.settings.coloursPallete.splice(index, 1);
                                 await plugin.saveSettings();
                                 renderColors();
                             });
@@ -80,7 +90,7 @@ export class PaletteSettings extends BaseSettings {
             .setName('Add Color')
             .addButton((btn) => {
                 btn.setButtonText('Add').onClick(async () => {
-                    plugin.settings.defaultColors.push(new Colour('New Color', '#ffffff'));
+                    plugin.settings.coloursPallete.push(new Colour('New Color', '#ffffff'));
                     await plugin.saveSettings();
                     renderColors();
                 });

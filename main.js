@@ -39,7 +39,7 @@ var import_obsidian3 = require("obsidian");
 var import_obsidian = require("obsidian");
 
 // settings/base_settings.ts
-var BaseSettings = class {
+var BaseSettingsTab = class {
   constructor(plugin, containerEl) {
     this.plugin = plugin;
     this.containerEl = containerEl;
@@ -47,7 +47,7 @@ var BaseSettings = class {
 };
 
 // settings/pallet.ts
-var PaletteSettings = class extends BaseSettings {
+var PaletteSettingsTab = class extends BaseSettingsTab {
   display() {
     const { containerEl, plugin } = this;
     containerEl.createEl("h2", { text: "Default Colors" });
@@ -72,27 +72,36 @@ var PaletteSettings = class extends BaseSettings {
         }
       };
       btn.onClick(toggle);
-      colorsHeader.settingEl.addEventListener("dblclick", toggle);
+      colorsHeader.settingEl.addEventListener(
+        "dblclick",
+        (event) => {
+          const target = event.target;
+          if (target.closest("input, .checkbox-container, .extra-setting-button")) {
+            return;
+          }
+          toggle();
+        }
+      );
     });
     const colorListContainer = colorsContainer.createDiv();
     const renderColors = () => {
       colorListContainer.empty();
-      plugin.settings.defaultColors.forEach((colorValue, index) => {
+      plugin.settings.coloursPallete.forEach((colorValue, index) => {
         const setting = new import_obsidian.Setting(colorListContainer);
         setting.addText((text) => {
           text.setValue(colorValue.name).onChange(async (value) => {
-            plugin.settings.defaultColors[index].name = value;
+            plugin.settings.coloursPallete[index].name = value;
             await plugin.saveSettings();
           });
           setting.nameEl.appendChild(text.inputEl);
         }).addColorPicker((color) => {
           color.setValue(colorValue.value).onChange(async (value) => {
-            plugin.settings.defaultColors[index].value = value;
+            plugin.settings.coloursPallete[index].value = value;
             await plugin.saveSettings();
           });
         }).addExtraButton((btn) => {
           btn.setIcon("trash").setTooltip("Remove").onClick(async () => {
-            plugin.settings.defaultColors.splice(index, 1);
+            plugin.settings.coloursPallete.splice(index, 1);
             await plugin.saveSettings();
             renderColors();
           });
@@ -102,7 +111,7 @@ var PaletteSettings = class extends BaseSettings {
     renderColors();
     new import_obsidian.Setting(colorsContainer).setName("Add Color").addButton((btn) => {
       btn.setButtonText("Add").onClick(async () => {
-        plugin.settings.defaultColors.push(new Colour("New Color", "#ffffff"));
+        plugin.settings.coloursPallete.push(new Colour("New Color", "#ffffff"));
         await plugin.saveSettings();
         renderColors();
       });
@@ -112,72 +121,26 @@ var PaletteSettings = class extends BaseSettings {
 
 // settings/lexers.ts
 var import_obsidian2 = require("obsidian");
-
-// lexing/lexers/index.ts
-var lexers_exports = {};
-__export(lexers_exports, {
-  ExampleLexer: () => ExampleLexer,
-  TestLexer: () => TestLexer
-});
-
-// lexing/api.ts
-var lexers = [];
-
-// lexing/lexers/example.ts
-var ExampleLexer = class {
-  getExtention() {
-    return "example";
-  }
-  getAvailableToeknTypes() {
-    return ["example", "example2"];
-  }
-  tokenize(text) {
-    const target = /\w+/gi;
-    let match;
-    const tokens = [];
-    while ((match = target.exec(text)) !== null) {
-      tokens.push({
-        text: match[0],
-        type: "example"
-      });
-    }
-    return tokens;
-  }
-};
-lexers.push(new ExampleLexer());
-
-// lexing/lexers/test.ts
-var TestLexer = class {
-  getExtention() {
-    return "test";
-  }
-  getAvailableToeknTypes() {
-    return ["test", "test2"];
-  }
-  tokenize(text) {
-    const target = /\w+/gi;
-    let match;
-    const tokens = [];
-    while ((match = target.exec(text)) !== null) {
-      tokens.push({
-        text: match[0],
-        type: "test"
-      });
-    }
-    return tokens;
-  }
-};
-lexers.push(new TestLexer());
-
-// settings/lexers.ts
-var LexerSettings = class extends BaseSettings {
+var LexerSettingsTab = class extends BaseSettingsTab {
   display() {
-    const { containerEl } = this;
-    containerEl.createEl("h1", { text: "Lexers" });
-    for (const lexer of lexers) {
+    const { containerEl, plugin } = this;
+    containerEl.createEl("h2", { text: "Lexers Settings" });
+    plugin.settings.lexers.forEach((lexer, index) => {
       const lexerDiv = containerEl.createDiv();
-      const header = new import_obsidian2.Setting(lexerDiv).setName(lexer.getExtention()).setDesc(`extention for the ${lexer.getExtention()} lexer`).addToggle((toggle) => {
-        toggle.setValue(true);
+      const header = new import_obsidian2.Setting(lexerDiv).setName(lexer.extension).addText((text) => {
+        const container = text.inputEl.parentElement;
+        if (container) {
+          container.prepend(createSpan({ text: "Code-Block Extension: " }));
+        }
+        text.setValue(lexer.extension).onChange(async (value) => {
+          plugin.settings.lexers[index].extension = value;
+          await plugin.saveSettings();
+        });
+      }).addToggle((toggle) => {
+        toggle.setValue(lexer.enabled).onChange(async (value) => {
+          plugin.settings.lexers[index].enabled = value;
+          await this.plugin.saveSettings();
+        });
       }).setClass("tokens-colors-header");
       header.settingEl.addClass("collapsed");
       const tokensDiv = lexerDiv.createDiv();
@@ -198,18 +161,38 @@ var LexerSettings = class extends BaseSettings {
           }
         };
         btn.onClick(toggle);
-        header.settingEl.addEventListener("dblclick", toggle);
+        header.settingEl.addEventListener("dblclick", (event) => {
+          const target = event.target;
+          if (target.closest("input, .checkbox-container, .extra-setting-button")) {
+            return;
+          }
+          toggle();
+        });
       });
-      let tokens = lexer.getAvailableToeknTypes();
-      if (tokens.length === 0)
-        continue;
-      const last_token = tokens[tokens.length - 1];
-      tokens = tokens.slice(0, -1);
-      for (const token of tokens) {
-        new import_obsidian2.Setting(tokensDiv).setName(`${token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-element");
-      }
-      new import_obsidian2.Setting(tokensDiv).setName(`${last_token} Color`).addColorPicker((color) => color.setValue("#ff0000")).setClass("tokens-colors-footer");
-    }
+      let mappings = lexer.colourMappings;
+      mappings.forEach((mapping, index2) => {
+        let colorComp;
+        let cssClass = "tokens-colors-element";
+        if (index2 === mappings.length - 1) {
+          cssClass = "tokens-colors-footer";
+        }
+        new import_obsidian2.Setting(tokensDiv).setName(`${mapping.tokenType} Color`).setClass(cssClass).addDropdown((dropdown) => {
+          for (const option of this.plugin.settings.coloursPallete) {
+            dropdown.addOption(option.value, option.name);
+          }
+          dropdown.addOption("custom", "Custom Color");
+          dropdown.setValue(mapping.color);
+          dropdown.onChange(async (value) => {
+            lexer.colourMappings[index2].color = value;
+            colorComp.setValue(value);
+            await this.plugin.saveSettings();
+          });
+        }).addColorPicker((color) => {
+          colorComp = color;
+          color.setValue(mapping.color).setDisabled(true);
+        });
+      });
+    });
   }
 };
 
@@ -235,10 +218,91 @@ var LetterASettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new PaletteSettings(this.plugin, containerEl).display();
-    new LexerSettings(this.plugin, containerEl).display();
+    new PaletteSettingsTab(this.plugin, containerEl).display();
+    new LexerSettingsTab(this.plugin, containerEl).display();
   }
 };
+
+// lexing/lexers/index.ts
+var lexers_exports = {};
+__export(lexers_exports, {
+  ExampleLexer: () => ExampleLexer,
+  TestLexer: () => TestLexer
+});
+
+// lexing/api.ts
+var Lexer = class {
+  constructor(defaultExtension, enabled, extension, colourMappings) {
+    console.log("Initializing lexer with:", defaultExtension, enabled, extension, colourMappings);
+    let targeet_lexer;
+    if (!defaultExtension) {
+      const subclass = this.constructor;
+      targeet_lexer = subclass;
+    } else {
+      for (const lexer of lexers) {
+        if (lexer.defaultExtension === defaultExtension) {
+          targeet_lexer = lexer;
+          break;
+        }
+      }
+    }
+    if (!targeet_lexer) {
+      throw new Error(`Lexer with default extension "${defaultExtension}" not found.`);
+    }
+    console.log("Target lexer found:", targeet_lexer.defaultExtension);
+    this.tokenize = targeet_lexer.tokenize;
+    this.defaultExtension = targeet_lexer.defaultExtension;
+    this.defaultColourMappings = targeet_lexer.defaultColourMappings;
+    this.extension = extension != null ? extension : this.defaultExtension;
+    this.colourMappings = colourMappings != null ? colourMappings : this.defaultColourMappings;
+    this.enabled = enabled != null ? enabled : true;
+  }
+  // the main function, takes the text inside the code block and returns a list of tokens with their types, which will be used to create the decorations
+};
+var lexers = [];
+
+// lexing/lexers/example.ts
+var ExampleLexer = class extends Lexer {
+  tokenize(text) {
+    const target = /\w+/gi;
+    let match;
+    const tokens = [];
+    while ((match = target.exec(text)) !== null) {
+      tokens.push({
+        text: match[0],
+        type: "example"
+      });
+    }
+    return tokens;
+  }
+};
+ExampleLexer.defaultExtension = "example";
+ExampleLexer.defaultColourMappings = [
+  { tokenType: "example", color: "#ff0000" }
+];
+lexers.push(new ExampleLexer());
+
+// lexing/lexers/test.ts
+var TestLexer = class extends Lexer {
+  tokenize(text) {
+    const target = /\w+/gi;
+    let match;
+    const tokens = [];
+    while ((match = target.exec(text)) !== null) {
+      tokens.push({
+        text: match[0],
+        type: "test"
+      });
+    }
+    return tokens;
+  }
+};
+TestLexer.defaultExtension = "test";
+TestLexer.defaultColourMappings = [
+  { tokenType: "test", color: "#ff0000" },
+  { tokenType: "test2", color: "#00ff00" }
+];
+lexers.push(new TestLexer());
 
 // main.ts
 var Colour = class {
@@ -252,14 +316,17 @@ var DEFAULT_SETTINGS = {
   // Default Red
   codeExtension: "customCode",
   // Default code block extension to look for
-  defaultColors: [
+  coloursPallete: [
     new Colour("Red", "#ff0000"),
     new Colour("Green", "#00ff00"),
     new Colour("Blue", "#0000ff"),
     new Colour("Yellow", "#ffff00"),
     new Colour("Cyan", "#00ffff"),
     new Colour("Magenta", "#ff00ff")
-  ]
+  ],
+  lexers
+  // TODO: complicate this a little, instead of just taking the lexers from the array, 
+  // create new instances of them here, to be able to set their default value unless they are serialzied from data.json
 };
 var LetterAPlugin = class extends import_obsidian4.Plugin {
   async onload() {
@@ -269,9 +336,11 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
     this.updateColorStyle();
   }
   async loadSettings() {
+    console.log("loading data");
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
   async saveSettings() {
+    console.log("Saving settings:", this.settings);
     await this.saveData(this.settings);
     this.updateColorStyle();
     this.app.workspace.updateOptions();
@@ -317,15 +386,17 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
             while ((code_block = code_block_regex.exec(file_text)) !== null) {
               const start_of_code_block = from + code_block.index + code_block[HEADER_ID].length;
               const textInsideCodeBlock = code_block[BLOCK_TEXT_ID];
-              const target_regex = /\w+/gi;
+              const target_regex = /ab/gi;
               let match;
               while ((match = target_regex.exec(textInsideCodeBlock)) !== null) {
                 const match_content = match[0];
                 const matchPos = start_of_code_block + match.index;
-                const replaceDecoration = import_view.Decoration.replace({
-                  widget: new BWidget(match_content)
-                });
-                builder.add(matchPos, matchPos + match_content.length, replaceDecoration);
+                for (let i = 0; i < match_content.length; i++) {
+                  const replaceDecoration = import_view.Decoration.replace({
+                    widget: new BWidget(match_content[i])
+                  });
+                  builder.add(matchPos + i, matchPos + i + 1, replaceDecoration);
+                }
               }
             }
           }
