@@ -1,4 +1,4 @@
-import { Plugin, PluginSettingTab, Setting, ColorComponent } from 'obsidian';
+import { Plugin, PluginSettingTab, Setting, ColorComponent, DropdownComponent } from 'obsidian';
 import { Extension, RangeSetBuilder } from '@codemirror/state';
 import {
 	Decoration,
@@ -50,6 +50,8 @@ const DEFAULT_SETTINGS: LetterAPluginSettings = {
 // 2. The Main Plugin Class
 export default class LetterAPlugin extends Plugin {
 	settings: LetterAPluginSettings;
+
+	dropdowns: DropdownComponent[]
 
 	async onload() {
 		await this.loadSettings();

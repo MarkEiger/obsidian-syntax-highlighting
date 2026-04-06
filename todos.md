@@ -7,11 +7,12 @@ done:
 - add default settings for every lexer
 
 todo:
-- chnage the colour picker for token types to a dropdown, with the last option being adding a new colour
-
-
-- add the pallete as options to the lexers
-- make a switch button between the colour picker and the pallete dropdown
+- when a new colour is added to the pallete, it should imdiatly appear for the lexers too
+- do so by keeping a handle to the dropdown just like with the colour picker
+- also if a colour that is used is deleted, need to deside what to do
+- maybe disable the button if its in use (would need a nice represenatation)
+- also might wanna add a confirmation menu to deliting a colour
+- add a way to add a new colour to the pallete from the lexers settings 
 - start actually using the lexers
 - make the lexers run not only on text chnage, but on settigns change too
 

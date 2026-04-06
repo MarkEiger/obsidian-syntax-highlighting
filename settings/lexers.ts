@@ -69,7 +69,8 @@ export class LexerSettingsTab extends BaseSettingsTab {
 				});
 			});
 
-			let mappings: ColourMapping[] = lexer.colourMappings
+			let mappings: ColourMapping[] = lexer.colourMappings;
+			this.plugin.dropdowns = [];
 			mappings.forEach((mapping, index) => {
 				let colorComp: ColorComponent;
 				let cssClass = 'tokens-colors-element';
@@ -80,16 +81,22 @@ export class LexerSettingsTab extends BaseSettingsTab {
 					.setName(`${mapping.tokenType} Color`)
 					.setClass(cssClass)
 					.addDropdown(dropdown => {
-						for (const option of this.plugin.settings.coloursPallete) {
-							dropdown.addOption(option.value, option.name);
+						// todo: register the populate funcs instead
+						this.plugin.dropdowns.push(dropdown)
+						
+						const populate = () => {
+							for (const option of this.plugin.settings.coloursPallete) {
+								dropdown.addOption(option.value, option.name);
+							}
+							dropdown.addOption('custom', 'Custom Color');
+							dropdown.setValue(mapping.color);
+							dropdown.onChange(async value => {
+								lexer.colourMappings[index].color = value;
+								colorComp.setValue(value);
+								await this.plugin.saveSettings();
+							});
 						}
-						dropdown.addOption('custom', 'Custom Color');
-						dropdown.setValue(mapping.color);
-						dropdown.onChange(async value => {
-							lexer.colourMappings[index].color = value;
-							colorComp.setValue(value);
-							await this.plugin.saveSettings();
-						});
+						populate()
 					})
 					.addColorPicker(color => {
 						colorComp = color;
