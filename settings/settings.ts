@@ -17,11 +17,13 @@ export class LetterASettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		const refresh = () => this.display();
+
 		containerEl.createEl('h2', { text: 'Highlighter Settings' });
 		// TODO: rewrite this in a way that new Settings are easy to add
 		// just like lexers are
-		new PaletteSettingsTab(this.plugin, containerEl).display();
-		new LexerSettingsTab(this.plugin, containerEl).display();
+		new PaletteSettingsTab(this.plugin, containerEl, refresh).display();
+		new LexerSettingsTab(this.plugin, containerEl, refresh).display();
 	}
 }
 

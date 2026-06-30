@@ -26,6 +26,9 @@ export const refreshHighlight = StateEffect.define<null>();
 export default class LetterAPlugin extends Plugin {
 	settings: LetterAPluginSettings = DEFAULT_SETTINGS;
 	lexers: LexersMap =  {}
+	// transient (not persisted) — which settings sections are expanded, so a
+	// re-render of the settings pane preserves the user's open/closed sections
+	expandedSections: Set<string> = new Set();
 
 	async onload() {
 		await this.loadSettings();

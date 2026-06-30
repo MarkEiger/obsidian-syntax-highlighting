@@ -23,28 +23,26 @@ export class PaletteSettingsTab extends BaseSettingsTab {
             .setDesc('Manage default colors')
             .setClass('tokens-colors-header');
 
-        colorsHeader.settingEl.addClass('collapsed');
-
         const colorsContainer = defaultColorsDiv.createDiv();
-        colorsContainer.hide();
 
         colorsHeader.addExtraButton((btn) => {
-            btn.setIcon('chevron-right').setTooltip('Expand');
-
-            const toggle = () => {
-                if (colorsContainer.isShown()) {
-                    colorsContainer.hide();
-                    btn.setIcon('chevron-right');
-                    btn.setTooltip('Expand');
-                    colorsHeader.settingEl.addClass('collapsed');
-                } else {
+            const key = 'palette';
+            const apply = (expanded: boolean) => {
+                if (expanded) {
                     colorsContainer.show();
-                    btn.setIcon('chevron-down');
-                    btn.setTooltip('Collapse');
+                    btn.setIcon('chevron-down').setTooltip('Collapse');
                     colorsHeader.settingEl.removeClass('collapsed');
+                    plugin.expandedSections.add(key);
+                } else {
+                    colorsContainer.hide();
+                    btn.setIcon('chevron-right').setTooltip('Expand');
+                    colorsHeader.settingEl.addClass('collapsed');
+                    plugin.expandedSections.delete(key);
                 }
             };
+            apply(plugin.expandedSections.has(key)); // restore previous state
 
+            const toggle = () => apply(!colorsContainer.isShown());
             btn.onClick(toggle);
             colorsHeader.settingEl.addEventListener('dblclick', (event: MouseEvent) => {
 					// 3. Identify the element that was clicked
@@ -85,7 +83,7 @@ export class PaletteSettingsTab extends BaseSettingsTab {
                             .onClick(async () => {
                                 plugin.settings.coloursPallete.splice(index, 1);
                                 await plugin.saveSettings();
-                                renderColors();
+                                this.refresh();
                             });
                     })
                     .setClass('tokens-colors-element');
@@ -100,7 +98,7 @@ export class PaletteSettingsTab extends BaseSettingsTab {
                 btn.setButtonText('Add').onClick(async () => {
                     plugin.settings.coloursPallete.push({name:'New Color', value:'#ffffff'});
                     await plugin.saveSettings();
-                    renderColors();
+                    this.refresh();
                 });
             })
             .setClass('tokens-colors-footer');

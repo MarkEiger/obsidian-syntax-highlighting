@@ -34,28 +34,26 @@ export class LexerSettingsTab extends BaseSettingsTab {
 				})
 				.setClass('tokens-colors-header');	
 			
-			header.settingEl.addClass('collapsed');
-
 			const tokensDiv = lexerDiv.createDiv();
-			tokensDiv.hide();
 
 			header.addExtraButton((btn) => {
-				btn.setIcon('chevron-right').setTooltip('Expand');
-
-				const toggle = () => {
-					if (tokensDiv.isShown()) {
-						tokensDiv.hide();
-						btn.setIcon('chevron-right');
-						btn.setTooltip('Expand');
-						header.settingEl.addClass('collapsed');
-					} else {
+				const key = `lexer:${hash}`;
+				const apply = (expanded: boolean) => {
+					if (expanded) {
 						tokensDiv.show();
-						btn.setIcon('chevron-down');
-						btn.setTooltip('Collapse');
+						btn.setIcon('chevron-down').setTooltip('Collapse');
 						header.settingEl.removeClass('collapsed');
+						plugin.expandedSections.add(key);
+					} else {
+						tokensDiv.hide();
+						btn.setIcon('chevron-right').setTooltip('Expand');
+						header.settingEl.addClass('collapsed');
+						plugin.expandedSections.delete(key);
 					}
 				};
+				apply(plugin.expandedSections.has(key)); // restore previous state
 
+				const toggle = () => apply(!tokensDiv.isShown());
 				btn.onClick(toggle);
 				header.settingEl.addEventListener('dblclick', (event: MouseEvent) => {
 					// 3. Identify the element that was clicked
@@ -134,12 +132,9 @@ export class LexerSettingsTab extends BaseSettingsTab {
 									this.plugin.settings.coloursPallete.push(colour);
 									mappings[tokenType] = colour;
 									await this.plugin.saveSettings();
-									// reflect the new palette colour in the dropdown, just before
-									// the trailing "Custom Color" entry (which must stay last)
-									const opt = createEl('option', { value, text: name });
-									const customOpt = dropdownComp.selectEl.querySelector('option[value="custom"]');
-									dropdownComp.selectEl.insertBefore(opt, customOpt);
-									dropdownComp.setValue(value);
+									// re-render so the new colour shows in the palette tab
+									// and in every token dropdown
+									this.refresh();
 								}, async () => {
 									// cancelled: revert to the previous colour
 									mappings[tokenType] = previous;

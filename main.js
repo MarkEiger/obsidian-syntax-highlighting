@@ -40,9 +40,12 @@ var import_obsidian = require("obsidian");
 
 // settings/base_settings.ts
 var BaseSettingsTab = class {
-  constructor(plugin, containerEl) {
+  // `refresh` re-renders the whole settings pane, so a change in one tab
+  // (e.g. adding/removing a palette colour) is reflected in the others.
+  constructor(plugin, containerEl, refresh) {
     this.plugin = plugin;
     this.containerEl = containerEl;
+    this.refresh = refresh;
   }
 };
 
@@ -61,24 +64,24 @@ var PaletteSettingsTab = class extends BaseSettingsTab {
     containerEl.createEl("h2", { text: "Default Colors" });
     const defaultColorsDiv = containerEl.createDiv();
     const colorsHeader = new import_obsidian.Setting(defaultColorsDiv).setName("Palette").setDesc("Manage default colors").setClass("tokens-colors-header");
-    colorsHeader.settingEl.addClass("collapsed");
     const colorsContainer = defaultColorsDiv.createDiv();
-    colorsContainer.hide();
     colorsHeader.addExtraButton((btn) => {
-      btn.setIcon("chevron-right").setTooltip("Expand");
-      const toggle = () => {
-        if (colorsContainer.isShown()) {
-          colorsContainer.hide();
-          btn.setIcon("chevron-right");
-          btn.setTooltip("Expand");
-          colorsHeader.settingEl.addClass("collapsed");
-        } else {
+      const key = "palette";
+      const apply = (expanded) => {
+        if (expanded) {
           colorsContainer.show();
-          btn.setIcon("chevron-down");
-          btn.setTooltip("Collapse");
+          btn.setIcon("chevron-down").setTooltip("Collapse");
           colorsHeader.settingEl.removeClass("collapsed");
+          plugin.expandedSections.add(key);
+        } else {
+          colorsContainer.hide();
+          btn.setIcon("chevron-right").setTooltip("Expand");
+          colorsHeader.settingEl.addClass("collapsed");
+          plugin.expandedSections.delete(key);
         }
       };
+      apply(plugin.expandedSections.has(key));
+      const toggle = () => apply(!colorsContainer.isShown());
       btn.onClick(toggle);
       colorsHeader.settingEl.addEventListener(
         "dblclick",
@@ -111,7 +114,7 @@ var PaletteSettingsTab = class extends BaseSettingsTab {
           btn.setIcon("trash").setTooltip("Remove").onClick(async () => {
             plugin.settings.coloursPallete.splice(index, 1);
             await plugin.saveSettings();
-            renderColors();
+            this.refresh();
           });
         }).setClass("tokens-colors-element");
       });
@@ -121,7 +124,7 @@ var PaletteSettingsTab = class extends BaseSettingsTab {
       btn.setButtonText("Add").onClick(async () => {
         plugin.settings.coloursPallete.push({ name: "New Color", value: "#ffffff" });
         await plugin.saveSettings();
-        renderColors();
+        this.refresh();
       });
     }).setClass("tokens-colors-footer");
   }
@@ -154,24 +157,24 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           await this.plugin.saveSettings();
         });
       }).setClass("tokens-colors-header");
-      header.settingEl.addClass("collapsed");
       const tokensDiv = lexerDiv.createDiv();
-      tokensDiv.hide();
       header.addExtraButton((btn) => {
-        btn.setIcon("chevron-right").setTooltip("Expand");
-        const toggle = () => {
-          if (tokensDiv.isShown()) {
-            tokensDiv.hide();
-            btn.setIcon("chevron-right");
-            btn.setTooltip("Expand");
-            header.settingEl.addClass("collapsed");
-          } else {
+        const key = `lexer:${hash}`;
+        const apply = (expanded) => {
+          if (expanded) {
             tokensDiv.show();
-            btn.setIcon("chevron-down");
-            btn.setTooltip("Collapse");
+            btn.setIcon("chevron-down").setTooltip("Collapse");
             header.settingEl.removeClass("collapsed");
+            plugin.expandedSections.add(key);
+          } else {
+            tokensDiv.hide();
+            btn.setIcon("chevron-right").setTooltip("Expand");
+            header.settingEl.addClass("collapsed");
+            plugin.expandedSections.delete(key);
           }
         };
+        apply(plugin.expandedSections.has(key));
+        const toggle = () => apply(!tokensDiv.isShown());
         btn.onClick(toggle);
         header.settingEl.addEventListener("dblclick", (event) => {
           const target = event.target;
@@ -231,10 +234,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
               this.plugin.settings.coloursPallete.push(colour2);
               mappings[tokenType] = colour2;
               await this.plugin.saveSettings();
-              const opt = createEl("option", { value, text: name });
-              const customOpt = dropdownComp.selectEl.querySelector('option[value="custom"]');
-              dropdownComp.selectEl.insertBefore(opt, customOpt);
-              dropdownComp.setValue(value);
+              this.refresh();
             }, async () => {
               mappings[tokenType] = previous;
               dropdownComp.setValue(prevIsCustom ? "custom" : previous.value);
@@ -294,9 +294,10 @@ var LetterASettingTab = class extends import_obsidian3.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
+    const refresh = () => this.display();
     containerEl.createEl("h2", { text: "Highlighter Settings" });
-    new PaletteSettingsTab(this.plugin, containerEl).display();
-    new LexerSettingsTab(this.plugin, containerEl).display();
+    new PaletteSettingsTab(this.plugin, containerEl, refresh).display();
+    new LexerSettingsTab(this.plugin, containerEl, refresh).display();
   }
 };
 var LexerSettings = class {
@@ -362,6 +363,9 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
     this.lexers = {};
+    // transient (not persisted) — which settings sections are expanded, so a
+    // re-render of the settings pane preserves the user's open/closed sections
+    this.expandedSections = /* @__PURE__ */ new Set();
   }
   async onload() {
     await this.loadSettings();

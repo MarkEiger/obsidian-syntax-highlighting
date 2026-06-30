@@ -29,12 +29,8 @@
       "value": "#ffc2ff"
     },
     {
-      "name": "Turquoize",
-      "value": "#70ffc8"
-    },
-    {
-      "name": "cute purple",
-      "value": "#875cff"
+      "name": "Emerald",
+      "value": "#004211"
     }
   ],
   "lexersSettings": {
@@ -42,8 +38,8 @@
       "extention": "example",
       "colourMappings": {
         "word": {
-          "name": "Interesting Blue",
-          "value": "#568ed7"
+          "name": "Emerald",
+          "value": "#004211"
         }
       },
       "enabled": true
