@@ -21,16 +21,12 @@
       "value": "#00ffff"
     },
     {
-      "name": "Magenta",
-      "value": "#ff00ff"
-    },
-    {
       "name": "Bright Pink",
       "value": "#ffc2ff"
     },
     {
-      "name": "Emerald",
-      "value": "#004211"
+      "name": "Magenta",
+      "value": "#ff0095"
     }
   ],
   "lexersSettings": {
@@ -38,8 +34,8 @@
       "extention": "example",
       "colourMappings": {
         "word": {
-          "name": "Emerald",
-          "value": "#004211"
+          "name": "Magenta",
+          "value": "#ff0095"
         }
       },
       "enabled": true

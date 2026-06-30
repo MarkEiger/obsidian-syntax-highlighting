@@ -1,4 +1,4 @@
-import { Setting } from 'obsidian';
+import { Notice, Setting } from 'obsidian';
 import { BaseSettingsTab } from './base_settings';
 import { Colour } from './settings';
 
@@ -78,9 +78,15 @@ export class PaletteSettingsTab extends BaseSettingsTab {
                         });
                     })
                     .addExtraButton((btn) => {
+                        const inUse = this.colourInUse(colorValue);
                         btn.setIcon('trash')
-                            .setTooltip('Remove')
+                            .setTooltip(inUse ? 'In use by a token type — cannot delete' : 'Remove')
                             .onClick(async () => {
+                                // recompute: a token may have been re-coloured since render
+                                if (this.colourInUse(colorValue)) {
+                                    new Notice(`Cannot delete "${colorValue.name}": it is in use by a token type.`);
+                                    return;
+                                }
                                 plugin.settings.coloursPallete.splice(index, 1);
                                 await plugin.saveSettings();
                                 this.refresh();
@@ -102,5 +108,13 @@ export class PaletteSettingsTab extends BaseSettingsTab {
                 });
             })
             .setClass('tokens-colors-footer');
+    }
+
+    // a colour is "in use" if any lexer's token mapping references it (matched
+    // by value, the same way the dropdowns resolve a mapping to a palette
+    // colour). Includes disabled lexers.
+    private colourInUse(colour: Colour): boolean {
+        return Object.values(this.plugin.settings.lexersSettings).some(ls =>
+            Object.values(ls.colourMappings).some(c => c.value === colour.value));
     }
 }

@@ -17,7 +17,6 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						container.prepend(createSpan({ text: 'Code-Block Extension: ' }));
 					}
 					text.setValue(lexerSettings.extention).onChange(async (value) => {
-						// TODO: update the second hashmap so that it know it changed
 						const prev_value = lexerSettings.extention;
 						const lexer = plugin.lexers[prev_value]; 
 						delete plugin.lexers[prev_value];
