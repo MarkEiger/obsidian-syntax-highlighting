@@ -42,8 +42,8 @@
       "extention": "example",
       "colourMappings": {
         "word": {
-          "name": "cute purple",
-          "value": "#875cff"
+          "name": "Interesting Blue",
+          "value": "#568ed7"
         }
       },
       "enabled": true
