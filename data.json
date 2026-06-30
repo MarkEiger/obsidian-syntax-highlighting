@@ -31,6 +31,10 @@
     {
       "name": "Turquoize",
       "value": "#70ffc8"
+    },
+    {
+      "name": "cute purple",
+      "value": "#875cff"
     }
   ],
   "lexersSettings": {
@@ -38,8 +42,8 @@
       "extention": "example",
       "colourMappings": {
         "word": {
-          "name": "Turquoize",
-          "value": "#70ffc8"
+          "name": "cute purple",
+          "value": "#875cff"
         }
       },
       "enabled": true

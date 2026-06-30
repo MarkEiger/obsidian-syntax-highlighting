@@ -134,8 +134,11 @@ export class LexerSettingsTab extends BaseSettingsTab {
 									this.plugin.settings.coloursPallete.push(colour);
 									mappings[tokenType] = colour;
 									await this.plugin.saveSettings();
-									// reflect the new palette colour in the dropdown
-									dropdownComp.addOption(value, name);
+									// reflect the new palette colour in the dropdown, just before
+									// the trailing "Custom Color" entry (which must stay last)
+									const opt = createEl('option', { value, text: name });
+									const customOpt = dropdownComp.selectEl.querySelector('option[value="custom"]');
+									dropdownComp.selectEl.insertBefore(opt, customOpt);
 									dropdownComp.setValue(value);
 								}, async () => {
 									// cancelled: revert to the previous colour

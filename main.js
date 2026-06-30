@@ -231,7 +231,9 @@ var LexerSettingsTab = class extends BaseSettingsTab {
               this.plugin.settings.coloursPallete.push(colour2);
               mappings[tokenType] = colour2;
               await this.plugin.saveSettings();
-              dropdownComp.addOption(value, name);
+              const opt = createEl("option", { value, text: name });
+              const customOpt = dropdownComp.selectEl.querySelector('option[value="custom"]');
+              dropdownComp.selectEl.insertBefore(opt, customOpt);
               dropdownComp.setValue(value);
             }, async () => {
               mappings[tokenType] = previous;
