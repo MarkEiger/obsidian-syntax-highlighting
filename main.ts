@@ -9,22 +9,41 @@ import {
 	WidgetType,
 } from '@codemirror/view';
 
-import { LetterASettingTab } from 'settings/settings';
+import { LetterASettingTab, LexerSettings } from 'settings/settings';
 import { LetterAPluginSettings, DEFAULT_SETTINGS, Colour } from 'settings/settings';
-import { Lexer } from 'lexing/api';
+import { Lexer, lexers } from 'lexing/api';
+import { hashLexer } from 'lexing/hashLexer';
+import { default_colours } from 'settings/pallet';
 
+type LexerWithHash = {lexer: Lexer, hash: string};
+type LexersMap = Map<string, LexerWithHash>;
 // 2. The Main Plugin Class
 export default class LetterAPlugin extends Plugin {
 	settings: LetterAPluginSettings = DEFAULT_SETTINGS;
+	lexers: LexersMap =  new Map();
 
 	async onload() {
 		await this.loadSettings();
+
+		await this.loadLexers();
 
 		// Register the Editor Extension
 		this.registerEditorExtension(this.buildEditorExtension());
 
 		// Add the Settings Tab
 		this.addSettingTab(new LetterASettingTab(this.app, this));
+	}
+
+	async loadLexers(){
+		for (const lexer of lexers){
+			const hash = await hashLexer(lexer);
+			if (!this.settings.lexersSettings.has(hash))
+			{
+				this.settings.lexersSettings.set(hash, new LexerSettings(lexer.name, lexer.defaultColoursMapping))
+			}
+			const lexerSettings: LexerSettings = this.settings.lexersSettings.get(hash)!;
+			this.lexers.set(lexerSettings.extention, {lexer: lexer, hash: hash});
+		}
 	}
 
 	async loadSettings() {
@@ -85,11 +104,14 @@ export default class LetterAPlugin extends Plugin {
 						const EXTENTION_ID = 2;
 						const BLOCK_TEXT_ID = 3;
 						const FOOTER_ID = 4;
-						// todo: check if in lexersMap
-						if (code_block[EXTENTION_ID]) {
+						const lexerWithHash: LexerWithHash | undefined = plugin.lexers.get(code_block[EXTENTION_ID]);
+						if (!lexerWithHash){
 							continue;
 						}
-						const lexer: Lexer = undefined;
+
+						const lexer: Lexer = lexerWithHash.lexer;
+						const lexerSettings = plugin.settings.lexersSettings.get(lexerWithHash.hash)!;
+
 						const start_of_code_block = code_block.index + code_block[HEADER_ID].length; // Position of the start of the text inside the code block
 						const textInsideCodeBlock = code_block[BLOCK_TEXT_ID]; // The second capture group contains the text inside the code block
 						console.log("found code block: " + textInsideCodeBlock);
@@ -101,12 +123,14 @@ export default class LetterAPlugin extends Plugin {
 							const token_index = relevant_part.indexOf(token.text)
 
 							for (let i = 0; i < token.text.length; i++) {
+								const colour: Colour = lexerSettings.colourMappings.get(token.type) ?? default_colours[0];
 								const replaceDecoration = Decoration.replace({
-									widget: new BWidget(relevant_part[token_index + i], lexer.defaultColoursMapping.get(token.type) ?? new Colour("Red", "#ff0000")),
+									widget: new BWidget(relevant_part[token_index + i], colour),
 								});
 								const matchPos = start_of_code_block + last_index + token_index
 								builder.add(matchPos + i, matchPos + i + 1, replaceDecoration);
 							}
+							last_index += token_index + token.text.length;
 						}
 					}
 

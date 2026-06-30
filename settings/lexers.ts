@@ -21,23 +21,23 @@ export class LexerSettingsTab extends BaseSettingsTab {
 		containerEl.createEl('h2', { text: 'Lexers Settings' });
 
 		
-		plugin.settings.lexers.forEach((lexer, index) => {
+		plugin.settings.lexersSettings.forEach((lexer, index) => {
 			const lexerDiv = containerEl.createDiv();
 			const header = new Setting(lexerDiv)
-				.setName(lexer.name)			
+				.setName(lexer.extention)			
 				.addText(text => {
 					const container = text.inputEl.parentElement;
 					if (container) {
 						container.prepend(createSpan({ text: 'Code-Block Extension: ' }));
 					}
 					text.setValue(lexer.extension).onChange(async (value) => {
-						plugin.settings.lexers[index].extension = value
+						plugin.settings.lexersSettings[index].extension = value
 						await plugin.saveSettings();
 					});
 				})
 				.addToggle(toggle => {
 					toggle.setValue(lexer.enabled).onChange(async value => {
-						plugin.settings.lexers[index].enabled = value;
+						plugin.settings.lexersSettings[index].enabled = value;
 						await this.plugin.saveSettings();
 					});
 				})

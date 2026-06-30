@@ -3,6 +3,7 @@ import LetterAPlugin from '../main';
 import { default_colours, PaletteSettingsTab } from './pallet';
 import { LexerSettingsTab } from './lexers';
 
+
 // 3. The Settings Tab Class
 export class LetterASettingTab extends PluginSettingTab {
 	plugin: LetterAPlugin;
@@ -50,11 +51,11 @@ export class LexerSettings {
 // 1. Define Settings Interface
 export interface LetterAPluginSettings {
 	coloursPallete: Colour[];
-	lexers: Map<string, LexerSettings>;
+	lexersSettings: Map<string, LexerSettings>;
 }
 
 // there is a bug, lexers aren't initialized yet when this is created, so it is empty
 export const DEFAULT_SETTINGS: LetterAPluginSettings = {
 	coloursPallete: default_colours,
-	lexers: new Map<string, LexerSettings>()
+	lexersSettings: new Map<string, LexerSettings>()
 };
