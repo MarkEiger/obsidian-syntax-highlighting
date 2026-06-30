@@ -27,11 +27,11 @@
   ],
   "lexersSettings": {
     "e14e987b3f3ce4e35fc5d65105a5d3a31fc92be81cbc7d1ee7eba6577bc5d006": {
-      "extention": "nmap",
+      "extention": "nmaps",
       "colourMappings": {
         "word": {
           "name": "custom",
-          "value": "#00ffff"
+          "value": "#ffab8f"
         }
       },
       "enabled": true

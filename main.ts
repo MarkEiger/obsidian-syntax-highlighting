@@ -1,5 +1,5 @@
-import { Plugin } from 'obsidian';
-import { Extension, RangeSetBuilder } from '@codemirror/state';
+import { MarkdownView, Plugin } from 'obsidian';
+import { Extension, RangeSetBuilder, StateEffect } from '@codemirror/state';
 import {
 	Decoration,
 	DecorationSet,
@@ -18,6 +18,10 @@ import 'lexing';
 
 type LexerWithHash = {lexer: Lexer, hash: string};
 type LexersMap = Record<string, LexerWithHash>;
+
+// Dispatched to every editor when settings change, so the ViewPlugin
+// re-runs buildDecorations even though the document hasn't changed.
+export const refreshHighlight = StateEffect.define<null>();
 // 2. The Main Plugin Class
 export default class LetterAPlugin extends Plugin {
 	settings: LetterAPluginSettings = DEFAULT_SETTINGS;
@@ -56,8 +60,17 @@ export default class LetterAPlugin extends Plugin {
 	async saveSettings() {
 		console.log("Saving settings:", this.settings);
 		await this.saveData(this.settings);
-		// Force a refresh of the editor to apply new colors immediately
-		this.app.workspace.updateOptions();
+		// Force a refresh of the editors to apply the new settings immediately
+		this.refreshEditors();
+	}
+
+	refreshEditors() {
+		this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
+			const view = leaf.view as MarkdownView;
+			// editor.cm is the underlying CM6 EditorView (not in the public typings)
+			const cm = (view.editor as any)?.cm as EditorView | undefined;
+			cm?.dispatch({ effects: refreshHighlight.of(null) });
+		});
 	}
 
 	buildEditorExtension(): Extension {
@@ -71,7 +84,12 @@ export default class LetterAPlugin extends Plugin {
 				}
 
 				update(update: ViewUpdate) {
-					if (update.docChanged || update.viewportChanged) {
+					if (
+						update.docChanged ||
+						update.viewportChanged ||
+						update.transactions.some(tr =>
+							tr.effects.some(e => e.is(refreshHighlight)))
+					) {
 						this.decorations = this.buildDecorations(update.view);
 					}
 				}

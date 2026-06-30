@@ -24,7 +24,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // main.ts
 var main_exports = {};
 __export(main_exports, {
-  default: () => LetterAPlugin
+  default: () => LetterAPlugin,
+  refreshHighlight: () => refreshHighlight
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian4 = require("obsidian");
@@ -270,6 +271,7 @@ var exampleLexer = {
   name: "example",
   defaultColoursMapping: {
     word: default_colours[0]
+    // TODO:
     // determine how to handle default colours added by plugins, maybe add:
     // addCustomColour()
   },
@@ -291,6 +293,7 @@ var exampleLexer = {
 lexers.push(exampleLexer);
 
 // main.ts
+var refreshHighlight = import_state.StateEffect.define();
 var LetterAPlugin = class extends import_obsidian4.Plugin {
   constructor() {
     super(...arguments);
@@ -321,7 +324,15 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
   async saveSettings() {
     console.log("Saving settings:", this.settings);
     await this.saveData(this.settings);
-    this.app.workspace.updateOptions();
+    this.refreshEditors();
+  }
+  refreshEditors() {
+    this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+      var _a;
+      const view = leaf.view;
+      const cm = (_a = view.editor) == null ? void 0 : _a.cm;
+      cm == null ? void 0 : cm.dispatch({ effects: refreshHighlight.of(null) });
+    });
   }
   buildEditorExtension() {
     const plugin = this;
@@ -331,7 +342,7 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
           this.decorations = this.buildDecorations(view);
         }
         update(update) {
-          if (update.docChanged || update.viewportChanged) {
+          if (update.docChanged || update.viewportChanged || update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshHighlight)))) {
             this.decorations = this.buildDecorations(update.view);
           }
         }

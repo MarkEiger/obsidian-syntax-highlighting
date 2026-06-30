@@ -6,6 +6,7 @@ export const exampleLexer: Lexer = {
     defaultColoursMapping:
     {
         word: default_colours[0], 
+        // TODO:
         // determine how to handle default colours added by plugins, maybe add:
         // addCustomColour()
     },
