@@ -25,16 +25,12 @@ export class LetterASettingTab extends PluginSettingTab {
 	}
 }
 
-export class Colour{
+export type Colour = {
 	name: string;
 	value: string;
-	constructor(name: string, value: string) {
-		this.name = name;
-		this.value = value;
-	}
 }
 
-export type ColourMapping = Map<string, Colour>;
+export type ColourMapping = Record<string, Colour>;
 
 // move all this code to the apropriate filess
 export class LexerSettings {
@@ -51,11 +47,11 @@ export class LexerSettings {
 // 1. Define Settings Interface
 export interface LetterAPluginSettings {
 	coloursPallete: Colour[];
-	lexersSettings: Map<string, LexerSettings>;
+	lexersSettings: Record<string, LexerSettings>;
 }
 
 // there is a bug, lexers aren't initialized yet when this is created, so it is empty
 export const DEFAULT_SETTINGS: LetterAPluginSettings = {
 	coloursPallete: default_colours,
-	lexersSettings: new Map<string, LexerSettings>()
+	lexersSettings: {}
 };

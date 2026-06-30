@@ -2,13 +2,13 @@ import { Setting } from 'obsidian';
 import { BaseSettingsTab } from './base_settings';
 import { Colour } from './settings';
 
-export const default_colours = [
-    new Colour('Red', '#ff0000'),
-    new Colour('Green', '#00ff00'),
-    new Colour('Blue', '#0000ff'),
-    new Colour('Yellow', '#ffff00'),
-    new Colour('Cyan', '#00ffff'),
-    new Colour('Magenta', '#ff00ff')
+export const default_colours: Colour[] = [
+    {name: 'Red', value:'#ff0000'},
+    {name: 'Green', value: '#00ff00'},
+    {name: 'Blue', value: '#0000ff'},
+    {name: 'Yellow', value: '#ffff00'},
+    {name: 'Cyan', value: '#00ffff'},
+    {name: 'Magenta', value: '#ff00ff'}
 ]
 export class PaletteSettingsTab extends BaseSettingsTab {
     display() {
@@ -98,7 +98,7 @@ export class PaletteSettingsTab extends BaseSettingsTab {
             .setName('Add Color')
             .addButton((btn) => {
                 btn.setButtonText('Add').onClick(async () => {
-                    plugin.settings.coloursPallete.push(new Colour('New Color', '#ffffff'));
+                    plugin.settings.coloursPallete.push({name:'New Color', value:'#ffffff'});
                     await plugin.saveSettings();
                     renderColors();
                 });

@@ -13,12 +13,12 @@ export class Token{
 
 export interface Lexer {
   readonly name: string;
-  readonly defaultColoursMapping: Map<string, Colour>;
+  readonly defaultColoursMapping: Record<string, Colour>;
   tokenize(input: string): Token[];
 }
-// export var lexersMap: Map<string, Lexer> = new Map<string, Lexer>()
+
 export var lexers: Lexer[] = []
 
-export async function registerLexerNew(lexer: Lexer){
+export async function registerLexer(lexer: Lexer){
 	lexers.push(lexer)
 }

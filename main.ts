@@ -14,13 +14,14 @@ import { LetterAPluginSettings, DEFAULT_SETTINGS, Colour } from 'settings/settin
 import { Lexer, lexers } from 'lexing/api';
 import { hashLexer } from 'lexing/hashLexer';
 import { default_colours } from 'settings/pallet';
+import 'lexing';
 
 type LexerWithHash = {lexer: Lexer, hash: string};
-type LexersMap = Map<string, LexerWithHash>;
+type LexersMap = Record<string, LexerWithHash>;
 // 2. The Main Plugin Class
 export default class LetterAPlugin extends Plugin {
 	settings: LetterAPluginSettings = DEFAULT_SETTINGS;
-	lexers: LexersMap =  new Map();
+	lexers: LexersMap =  {}
 
 	async onload() {
 		await this.loadSettings();
@@ -37,12 +38,13 @@ export default class LetterAPlugin extends Plugin {
 	async loadLexers(){
 		for (const lexer of lexers){
 			const hash = await hashLexer(lexer);
-			if (!this.settings.lexersSettings.has(hash))
+			let lexerSettings: LexerSettings = this.settings.lexersSettings[hash];
+			if (!lexerSettings)
 			{
-				this.settings.lexersSettings.set(hash, new LexerSettings(lexer.name, lexer.defaultColoursMapping))
+				lexerSettings = new LexerSettings(lexer.name, lexer.defaultColoursMapping)
+				this.settings.lexersSettings[hash] = lexerSettings
 			}
-			const lexerSettings: LexerSettings = this.settings.lexersSettings.get(hash)!;
-			this.lexers.set(lexerSettings.extention, {lexer: lexer, hash: hash});
+			this.lexers[lexerSettings.extention] = {lexer: lexer, hash: hash};
 		}
 	}
 
@@ -104,13 +106,16 @@ export default class LetterAPlugin extends Plugin {
 						const EXTENTION_ID = 2;
 						const BLOCK_TEXT_ID = 3;
 						const FOOTER_ID = 4;
-						const lexerWithHash: LexerWithHash | undefined = plugin.lexers.get(code_block[EXTENTION_ID]);
+						const lexerWithHash: LexerWithHash | undefined = plugin.lexers[code_block[EXTENTION_ID]];
 						if (!lexerWithHash){
 							continue;
 						}
 
 						const lexer: Lexer = lexerWithHash.lexer;
-						const lexerSettings = plugin.settings.lexersSettings.get(lexerWithHash.hash)!;
+						const lexerSettings: LexerSettings = plugin.settings.lexersSettings[lexerWithHash.hash];
+						if (!lexerSettings.enabled){
+							continue;
+						}
 
 						const start_of_code_block = code_block.index + code_block[HEADER_ID].length; // Position of the start of the text inside the code block
 						const textInsideCodeBlock = code_block[BLOCK_TEXT_ID]; // The second capture group contains the text inside the code block
@@ -123,7 +128,7 @@ export default class LetterAPlugin extends Plugin {
 							const token_index = relevant_part.indexOf(token.text)
 
 							for (let i = 0; i < token.text.length; i++) {
-								const colour: Colour = lexerSettings.colourMappings.get(token.type) ?? default_colours[0];
+								const colour: Colour = lexerSettings.colourMappings[token.type] ?? default_colours[0];
 								const replaceDecoration = Decoration.replace({
 									widget: new BWidget(relevant_part[token_index + i], colour),
 								});

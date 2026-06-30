@@ -1,6 +1,4 @@
 {
-  "highlightColor": "#ff0000",
-  "codeExtension": "ab",
   "coloursPallete": [
     {
       "name": "Red",
@@ -27,49 +25,16 @@
       "value": "#ff00ff"
     }
   ],
-  "lexers": [
-    {
-      "defaultExtension": "example",
-      "defaultColourMappings": [
-        {
-          "tokenType": "example",
-          "color": "#ff0000"
+  "lexersSettings": {
+    "e14e987b3f3ce4e35fc5d65105a5d3a31fc92be81cbc7d1ee7eba6577bc5d006": {
+      "extention": "nmap",
+      "colourMappings": {
+        "word": {
+          "name": "custom",
+          "value": "#00ffff"
         }
-      ],
-      "extension": "a",
-      "colourMappings": [
-        {
-          "tokenType": "example",
-          "color": "#00ff00",
-          "colour": "#ff0000"
-        }
-      ],
-      "enabled": true
-    },
-    {
-      "defaultExtension": "test",
-      "defaultColourMappings": [
-        {
-          "tokenType": "test",
-          "color": "#2b00ff"
-        },
-        {
-          "tokenType": "test2",
-          "color": "#00ff00"
-        }
-      ],
-      "extension": "test23",
-      "colourMappings": [
-        {
-          "tokenType": "test",
-          "color": "#0000ff"
-        },
-        {
-          "tokenType": "test2",
-          "color": "#ff0000"
-        }
-      ],
+      },
       "enabled": true
     }
-  ]
+  }
 }

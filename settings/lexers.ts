@@ -1,18 +1,5 @@
 import { ColorComponent, Setting } from "obsidian";
 import { BaseSettingsTab } from "./base_settings";
-import { ColourMapping } from "lexing/api";
-
-
-class LexerSettings{
-	extention: string;
-	colourMappings: ColourMapping[];
-	enabled: boolean;
-	constructor(extention: string, colourMappings: ColourMapping[], enabled?: boolean){
-		this.extention = extention;
-		this.colourMappings = colourMappings;
-		this.enabled = enabled ?? true;
-	}
-}
 
 export class LexerSettingsTab extends BaseSettingsTab {
 	display() {
@@ -20,24 +7,28 @@ export class LexerSettingsTab extends BaseSettingsTab {
 		// Lexer Settings Section
 		containerEl.createEl('h2', { text: 'Lexers Settings' });
 
-		
-		plugin.settings.lexersSettings.forEach((lexer, index) => {
+		for (const [hash, lexerSettings] of Object.entries(plugin.settings.lexersSettings)){
 			const lexerDiv = containerEl.createDiv();
 			const header = new Setting(lexerDiv)
-				.setName(lexer.extention)			
+				.setName(lexerSettings.extention)			
 				.addText(text => {
 					const container = text.inputEl.parentElement;
 					if (container) {
 						container.prepend(createSpan({ text: 'Code-Block Extension: ' }));
 					}
-					text.setValue(lexer.extension).onChange(async (value) => {
-						plugin.settings.lexersSettings[index].extension = value
+					text.setValue(lexerSettings.extention).onChange(async (value) => {
+						// TODO: update the second hashmap so that it know it changed
+						const prev_value = lexerSettings.extention;
+						const lexer = plugin.lexers[prev_value]; 
+						delete plugin.lexers[prev_value];
+						lexerSettings.extention = value
+						plugin.lexers[value] = lexer;
 						await plugin.saveSettings();
 					});
 				})
 				.addToggle(toggle => {
-					toggle.setValue(lexer.enabled).onChange(async value => {
-						plugin.settings.lexersSettings[index].enabled = value;
+					toggle.setValue(lexerSettings.enabled).onChange(async value => {
+						lexerSettings.enabled = value;
 						await this.plugin.saveSettings();
 					});
 				})
@@ -78,40 +69,52 @@ export class LexerSettingsTab extends BaseSettingsTab {
 				});
 			});
 
-			let mappings: ColourMapping[] = lexer.colourMappings;
-			mappings.forEach((mapping, index) => {
+			const palette = this.plugin.settings.coloursPallete;
+			const mappings = lexerSettings.colourMappings;
+			const entries = Object.entries(mappings);
+			const count: number = entries.length;
+			let index = 0;
+			for (const [tokenType, colour] of entries){
 				let colorComp: ColorComponent;
-				let cssClass = 'tokens-colors-element';
-				if (index === mappings.length - 1){
-					cssClass = 'tokens-colors-footer';
-				}
+				// handle last entry for the rounded up corners
+				let cssClass = index === count - 1 ? 'tokens-colors-footer' : 'tokens-colors-element';
+				index++;
+
+				const isCustom = !palette.some(c => c.value === colour.value);
+
 				new Setting(tokensDiv)
-					.setName(`${mapping.tokenType} Color`)
+					.setName(`${tokenType} Color`)
 					.setClass(cssClass)
 					.addDropdown(dropdown => {
-						// todo: register the populate funcs instead
-						
-						const populate = () => {
-							for (const option of this.plugin.settings.coloursPallete) {
-								dropdown.addOption(option.value, option.name);
-							}
-							dropdown.addOption('custom', 'Custom Color');
-							dropdown.setValue(mapping.colour);
-							dropdown.onChange(async value => {
-								lexer.colourMappings[index].colour = value;
-								colorComp.setValue(value);
-								await this.plugin.saveSettings();
-							});
+						for (const option of palette) {
+							dropdown.addOption(option.value, option.name);
 						}
-						populate();
+						dropdown.addOption('custom', 'Custom Color');
+						dropdown.setValue(isCustom ? 'custom' : colour.value);
+						dropdown.onChange(async value => {
+							if (value === 'custom') {
+								// let the user pick any colour with the picker
+								colorComp.setDisabled(false);
+							} else {
+								const picked = palette.find(c => c.value === value)!;
+								mappings[tokenType] = { name: picked.name, value: picked.value };
+								colorComp.setValue(picked.value);
+								colorComp.setDisabled(true);
+							}
+							await this.plugin.saveSettings();
+						});
 					})
 					.addColorPicker(color => {
 						colorComp = color;
 						color
-						.setValue(mapping.colour)
-						.setDisabled(true)
+							.setValue(colour.value)
+							.setDisabled(!isCustom)
+							.onChange(async value => {
+								mappings[tokenType] = { name: 'custom', value: value };
+								await this.plugin.saveSettings();
+							});
 					});
-			});
-		});
+			};
+		};
 	}
 }

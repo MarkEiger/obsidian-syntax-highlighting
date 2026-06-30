@@ -1,28 +1,17 @@
 here are all the todos i can thing about so far:
 
-done:
-- add the extention as a configurable for every lexer
-- split the settings into two parts: pallete and lexersm with visible deviders
-- make the Lexers settings actually save state
-- add default settings for every lexer
 
 todo:
-- break lexer into the interface for users which is jsut the static part
-- create my own "lexerWithSettings" that tokenizes and then applies the colour by tghe current seetings
-- the stored data needs to be all the settings with a unqique id to be mapped to the lexer
-- first time round these fields are to be initialized by the lexers defaults supplied in the interface
-
-
-
-
-
-- start actually using the lexers
-- when a new colour is added to the pallete, it should imdiatly appear for the lexers too (i.e syntc lexers and pallete somehow)
-- also if a colour that is used is deleted, need to deside what to do
-- maybe disable the button if its in use (would need a nice represenatation)
-- also might wanna add a confirmation menu to deliting a colour
-- add a way to add a new colour to the pallete from the lexers settings 
+- replace map with record
+- chnaging the code block extention right now doesnt make the kexer target the new extention 
 - make the lexers run not only on text chnage, but on settigns change too
+
+- enable the colour picker
+- when a new colour is added to the pallete, it should imdiatly appear for the lexers too (i.e syntc lexers and pallete somehow)
+- forbid deleteing colours that are in use
+- maybe disable the button if its in use (would need a nice represenatation)
+- also might wanna add a confirmation menu to deleting a colour
+- add a way to add a new colour to the pallete from the lexers settings 
 
 
 
