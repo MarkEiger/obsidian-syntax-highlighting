@@ -1,7 +1,15 @@
 import { Setting } from 'obsidian';
-import { Colour } from '../main';
 import { BaseSettingsTab } from './base_settings';
+import { Colour } from './settings';
 
+export const default_colours = [
+    new Colour('Red', '#ff0000'),
+    new Colour('Green', '#00ff00'),
+    new Colour('Blue', '#0000ff'),
+    new Colour('Yellow', '#ffff00'),
+    new Colour('Cyan', '#00ffff'),
+    new Colour('Magenta', '#ff00ff')
+]
 export class PaletteSettingsTab extends BaseSettingsTab {
     display() {
         const { containerEl, plugin } = this;

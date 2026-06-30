@@ -2,19 +2,29 @@ import { ColorComponent, Setting } from "obsidian";
 import { BaseSettingsTab } from "./base_settings";
 import { ColourMapping } from "lexing/api";
 
+
+class LexerSettings{
+	extention: string;
+	colourMappings: ColourMapping[];
+	enabled: boolean;
+	constructor(extention: string, colourMappings: ColourMapping[], enabled?: boolean){
+		this.extention = extention;
+		this.colourMappings = colourMappings;
+		this.enabled = enabled ?? true;
+	}
+}
+
 export class LexerSettingsTab extends BaseSettingsTab {
 	display() {
 		const { containerEl, plugin } = this;
 		// Lexer Settings Section
 		containerEl.createEl('h2', { text: 'Lexers Settings' });
 
-		// take example from this
-		// plugin.settings.coloursPallete.forEach((colorValue, index) => {
-
+		
 		plugin.settings.lexers.forEach((lexer, index) => {
 			const lexerDiv = containerEl.createDiv();
 			const header = new Setting(lexerDiv)
-				.setName(lexer.extension)			
+				.setName(lexer.name)			
 				.addText(text => {
 					const container = text.inputEl.parentElement;
 					if (container) {
@@ -30,7 +40,6 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						plugin.settings.lexers[index].enabled = value;
 						await this.plugin.saveSettings();
 					});
-					// TODO: check wether false is ever set, cause code looks wierd
 				})
 				.setClass('tokens-colors-header');	
 			
@@ -70,7 +79,6 @@ export class LexerSettingsTab extends BaseSettingsTab {
 			});
 
 			let mappings: ColourMapping[] = lexer.colourMappings;
-			this.plugin.dropdowns = [];
 			mappings.forEach((mapping, index) => {
 				let colorComp: ColorComponent;
 				let cssClass = 'tokens-colors-element';
@@ -82,26 +90,25 @@ export class LexerSettingsTab extends BaseSettingsTab {
 					.setClass(cssClass)
 					.addDropdown(dropdown => {
 						// todo: register the populate funcs instead
-						this.plugin.dropdowns.push(dropdown)
 						
 						const populate = () => {
 							for (const option of this.plugin.settings.coloursPallete) {
 								dropdown.addOption(option.value, option.name);
 							}
 							dropdown.addOption('custom', 'Custom Color');
-							dropdown.setValue(mapping.color);
+							dropdown.setValue(mapping.colour);
 							dropdown.onChange(async value => {
-								lexer.colourMappings[index].color = value;
+								lexer.colourMappings[index].colour = value;
 								colorComp.setValue(value);
 								await this.plugin.saveSettings();
 							});
 						}
-						populate()
+						populate();
 					})
 					.addColorPicker(color => {
 						colorComp = color;
 						color
-						.setValue(mapping.color)
+						.setValue(mapping.colour)
 						.setDisabled(true)
 					});
 			});

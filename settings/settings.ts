@@ -1,6 +1,6 @@
 import { PluginSettingTab, Setting } from 'obsidian';
 import LetterAPlugin from '../main';
-import { PaletteSettingsTab } from './pallet';
+import { default_colours, PaletteSettingsTab } from './pallet';
 import { LexerSettingsTab } from './lexers';
 
 // 3. The Settings Tab Class
@@ -17,37 +17,44 @@ export class LetterASettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		containerEl.createEl('h2', { text: 'Highlighter Settings' });
-
-		// these two will have to be deleted (they are here jsut for previous testing till the code migrates to the new architecture)
-		// ---------------------------------------------------------------------------------------------------
-		new Setting(containerEl) // Highlight Color Setting
-			.setName('Highlight Color')
-			.setDesc('Choose the color for the letter "a" inside "a" code blocks.')
-			.addColorPicker((color) =>
-				color
-					.setValue(this.plugin.settings.highlightColor)
-					.onChange(async (value) => {
-						this.plugin.settings.highlightColor = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl) // Code Extension Setting
-			.setName('Code Extension')
-			.setDesc('The code block extension to look for. (regex syntax)')
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.codeExtension)
-					.onChange(async (value) => {
-						this.plugin.settings.codeExtension = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		// ---------------------------------------------------------------------------------------------------
-
 		// TODO: rewrite this in a way that new Settings are easy to add
 		// just like lexers are
 		new PaletteSettingsTab(this.plugin, containerEl).display();
 		new LexerSettingsTab(this.plugin, containerEl).display();
 	}
 }
+
+export class Colour{
+	name: string;
+	value: string;
+	constructor(name: string, value: string) {
+		this.name = name;
+		this.value = value;
+	}
+}
+
+export type ColourMapping = Map<string, Colour>;
+
+// move all this code to the apropriate filess
+export class LexerSettings {
+	extention: string;
+	colourMappings: ColourMapping;
+	enabled: boolean;
+	constructor(extention: string, colourMappings: ColourMapping, enabled?: boolean){
+		this.extention = extention;
+		this.colourMappings = colourMappings;
+		this.enabled = enabled ?? true;
+	}
+}
+
+// 1. Define Settings Interface
+export interface LetterAPluginSettings {
+	coloursPallete: Colour[];
+	lexers: Map<string, LexerSettings>;
+}
+
+// there is a bug, lexers aren't initialized yet when this is created, so it is empty
+export const DEFAULT_SETTINGS: LetterAPluginSettings = {
+	coloursPallete: default_colours,
+	lexers: new Map<string, LexerSettings>()
+};

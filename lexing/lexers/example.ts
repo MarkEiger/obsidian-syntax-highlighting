@@ -1,24 +1,26 @@
-import {ColourMapping, Lexer, LexerStaticDefaults, Token, lexers} from "../api";
+import { default_colours } from "settings/pallet";
+import {Lexer, Token, registerLexer} from "../api";;
 
-export class ExampleLexer extends Lexer implements LexerStaticDefaults{
-    static defaultExtension: string = "example";
-    static defaultColourMappings: ColourMapping[] = [
-        {tokenType: "example", color: "#ff0000"}
-    ];
-
-
-    tokenize(text: string): Token[] {
+export const exampleLexer: Lexer = {
+    name: "example",
+    defaultColoursMapping:
+    new Map([
+        ["word", default_colours[0]], 
+        // determine how to handle default colours added by plugins, maybe add:
+        // addCustomColour()
+    ]),
+    tokenize(input: string): Token[]{
         const target = /\w+/gi;
         let match;
         const tokens: Token[] = [];
-        while ((match = target.exec(text)) !== null) {
+        while ((match = target.exec(input)) !== null) {
             tokens.push({
                 text: match[0],
-                type: "example"
+                type: "word"
             });
         }
         return tokens;
     }
 }
 
-lexers.push(new ExampleLexer());
+registerLexer(exampleLexer);

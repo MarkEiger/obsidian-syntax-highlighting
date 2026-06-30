@@ -1,6 +1,6 @@
 {
   "highlightColor": "#ff0000",
-  "codeExtension": "customCode",
+  "codeExtension": "ab",
   "coloursPallete": [
     {
       "name": "Red",
@@ -36,11 +36,12 @@
           "color": "#ff0000"
         }
       ],
-      "extension": "example",
+      "extension": "a",
       "colourMappings": [
         {
           "tokenType": "example",
-          "color": "#ffffff"
+          "color": "#00ff00",
+          "colour": "#ff0000"
         }
       ],
       "enabled": true
@@ -57,11 +58,11 @@
           "color": "#00ff00"
         }
       ],
-      "extension": "test2",
+      "extension": "test23",
       "colourMappings": [
         {
           "tokenType": "test",
-          "color": "#ffff00"
+          "color": "#0000ff"
         },
         {
           "tokenType": "test2",

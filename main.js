@@ -127,7 +127,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
     containerEl.createEl("h2", { text: "Lexers Settings" });
     plugin.settings.lexers.forEach((lexer, index) => {
       const lexerDiv = containerEl.createDiv();
-      const header = new import_obsidian2.Setting(lexerDiv).setName(lexer.extension).addText((text) => {
+      const header = new import_obsidian2.Setting(lexerDiv).setName(lexer.defaultExtension).addText((text) => {
         const container = text.inputEl.parentElement;
         if (container) {
           container.prepend(createSpan({ text: "Code-Block Extension: " }));
@@ -177,19 +177,22 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           cssClass = "tokens-colors-footer";
         }
         new import_obsidian2.Setting(tokensDiv).setName(`${mapping.tokenType} Color`).setClass(cssClass).addDropdown((dropdown) => {
-          for (const option of this.plugin.settings.coloursPallete) {
-            dropdown.addOption(option.value, option.name);
-          }
-          dropdown.addOption("custom", "Custom Color");
-          dropdown.setValue(mapping.color);
-          dropdown.onChange(async (value) => {
-            lexer.colourMappings[index2].color = value;
-            colorComp.setValue(value);
-            await this.plugin.saveSettings();
-          });
+          const populate = () => {
+            for (const option of this.plugin.settings.coloursPallete) {
+              dropdown.addOption(option.value, option.name);
+            }
+            dropdown.addOption("custom", "Custom Color");
+            dropdown.setValue(mapping.colour);
+            dropdown.onChange(async (value) => {
+              lexer.colourMappings[index2].colour = value;
+              colorComp.setValue(value);
+              await this.plugin.saveSettings();
+            });
+          };
+          populate();
         }).addColorPicker((color) => {
           colorComp = color;
-          color.setValue(mapping.color).setDisabled(true);
+          color.setValue(mapping.colour).setDisabled(true);
         });
       });
     });
@@ -234,22 +237,25 @@ __export(lexers_exports, {
 var Lexer = class {
   constructor(defaultExtension, enabled, extension, colourMappings) {
     console.log("Initializing lexer with:", defaultExtension, enabled, extension, colourMappings);
-    let targeet_lexer;
+    let targeet_lexer = null;
     if (!defaultExtension) {
       const subclass = this.constructor;
       targeet_lexer = subclass;
+      console.log("subclass tokenize " + subclass.tokenize);
     } else {
       for (const lexer of lexers) {
         if (lexer.defaultExtension === defaultExtension) {
           targeet_lexer = lexer;
+          console.log("loop tokenize: " + targeet_lexer.tokenize);
           break;
         }
       }
     }
-    if (!targeet_lexer) {
+    if (targeet_lexer === null) {
       throw new Error(`Lexer with default extension "${defaultExtension}" not found.`);
     }
     console.log("Target lexer found:", targeet_lexer.defaultExtension);
+    console.log("setting tokenize for lexer " + targeet_lexer.defaultExtension + " " + targeet_lexer.tokenize);
     this.tokenize = targeet_lexer.tokenize;
     this.defaultExtension = targeet_lexer.defaultExtension;
     this.defaultColourMappings = targeet_lexer.defaultColourMappings;
@@ -257,33 +263,76 @@ var Lexer = class {
     this.colourMappings = colourMappings != null ? colourMappings : this.defaultColourMappings;
     this.enabled = enabled != null ? enabled : true;
   }
-  // the main function, takes the text inside the code block and returns a list of tokens with their types, which will be used to create the decorations
+  // abstract tokenize(text: string): Token[]; // the main function, takes the text inside the code block and returns a list of tokens with their types, which will be used to create the decorations
 };
 var lexers = [];
+var LexerSettings = class {
+  constructor(extention, enabled, coloursMapping) {
+    this.extention = extention;
+    this.enabled = enabled;
+    this.coloursMapping = coloursMapping;
+  }
+};
+var Lexer2 = class extends LexerSettings {
+  constructor(settings) {
+    super(settings.filenamne, settings.extention, settings.enabled, settings.coloursMapping);
+  }
+  static getFileName() {
+    throw new Error("getFileName() must be implemented");
+  }
+  static getDefaultExtension() {
+    throw new Error("getDefaultExtension() must be implemented");
+  }
+  static getDefaultColoursMapping() {
+    throw new Error("getDefaultColoursMapping() must be implemented");
+  }
+  is_enabled() {
+    return this.enabled;
+  }
+};
+var lexers2 = {};
+function registerLexer(lexerClass) {
+  const filename = lexerClass.getFileName();
+  if (filename in lexers2) {
+    alert("filename already registered");
+    return;
+  }
+  lexers2[filename] = lexerClass;
+}
 
 // lexing/lexers/example.ts
 var ExampleLexer = class extends Lexer {
-  tokenize(text) {
-    const target = /\w+/gi;
-    let match;
-    const tokens = [];
-    while ((match = target.exec(text)) !== null) {
-      tokens.push({
-        text: match[0],
-        type: "example"
-      });
-    }
-    return tokens;
+  constructor() {
+    super(...arguments);
+    this.tokenize = (text) => {
+      const target = /\w+/gi;
+      let match;
+      const tokens = [];
+      while ((match = target.exec(text)) !== null) {
+        tokens.push({
+          text: match[0],
+          type: "example"
+        });
+      }
+      return tokens;
+    };
   }
 };
 ExampleLexer.defaultExtension = "example";
 ExampleLexer.defaultColourMappings = [
-  { tokenType: "example", color: "#ff0000" }
+  { tokenType: "example", colour: "#ff0000" }
 ];
 lexers.push(new ExampleLexer());
-
-// lexing/lexers/test.ts
-var TestLexer = class extends Lexer {
+var ExampleLexer2 = class extends Lexer2 {
+  static getFileName() {
+    return "example.ts";
+  }
+  static getDefaultExtension() {
+    return "example2";
+  }
+  static getDefaultColoursMapping() {
+    return { tokenType: "example2", colour: "#00ff00" };
+  }
   tokenize(text) {
     const target = /\w+/gi;
     let match;
@@ -291,16 +340,36 @@ var TestLexer = class extends Lexer {
     while ((match = target.exec(text)) !== null) {
       tokens.push({
         text: match[0],
-        type: "test"
+        type: "example2"
       });
     }
     return tokens;
   }
 };
+registerLexer(ExampleLexer2);
+
+// lexing/lexers/test.ts
+var TestLexer = class extends Lexer {
+  constructor() {
+    super(...arguments);
+    this.tokenize = (text) => {
+      const target = /\w+/gi;
+      let match;
+      const tokens = [];
+      while ((match = target.exec(text)) !== null) {
+        tokens.push({
+          text: match[0],
+          type: "test"
+        });
+      }
+      return tokens;
+    };
+  }
+};
 TestLexer.defaultExtension = "test";
 TestLexer.defaultColourMappings = [
-  { tokenType: "test", color: "#ff0000" },
-  { tokenType: "test2", color: "#00ff00" }
+  { tokenType: "test", colour: "#ff0000" },
+  { tokenType: "test2", colour: "#00ff00" }
 ];
 lexers.push(new TestLexer());
 
@@ -329,6 +398,10 @@ var DEFAULT_SETTINGS = {
   // create new instances of them here, to be able to set their default value unless they are serialzied from data.json
 };
 var LetterAPlugin = class extends import_obsidian4.Plugin {
+  constructor() {
+    super(...arguments);
+    this.settings = DEFAULT_SETTINGS;
+  }
   async onload() {
     await this.loadSettings();
     this.registerEditorExtension(this.buildEditorExtension());
@@ -376,6 +449,37 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
           }
           for (const { from, to } of view.visibleRanges) {
             const file_text = view.state.sliceDoc(from, to);
+            console.log("starting the colourization loop");
+            for (const lexer of plugin.settings.lexers) {
+              console.log("running with lexer: " + lexer.defaultExtension);
+              console.log("lexer.tokenize is " + lexer.tokenize);
+              const extention = lexer.extension;
+              const code_block_regex2 = new RegExp(`(\`\`\`${extention}
+)([\\s\\S]*?)(\`\`\`)`, "gmi");
+              const HEADER_ID2 = 1;
+              const BLOCK_TEXT_ID2 = 2;
+              const FOOTER_ID2 = 3;
+              let code_block2;
+              while ((code_block2 = code_block_regex2.exec(file_text)) !== null) {
+                const start_of_code_block = from + code_block2.index + code_block2[HEADER_ID2].length;
+                const textInsideCodeBlock = code_block2[BLOCK_TEXT_ID2];
+                console.log("found code block: " + textInsideCodeBlock);
+                const tokens = lexer.tokenize(textInsideCodeBlock);
+                var last_index = 0;
+                for (const token of tokens) {
+                  console.log("token found " + token.text + " token type: " + token.type);
+                  const relevant_part = textInsideCodeBlock.slice(last_index);
+                  const token_index = relevant_part.indexOf(token.text);
+                  for (let i = 0; i < token.text.length; i++) {
+                    const replaceDecoration = import_view.Decoration.replace({
+                      widget: new BWidget(relevant_part[token_index + i])
+                    });
+                    const matchPos = start_of_code_block + last_index + token_index;
+                    builder.add(matchPos + i, matchPos + i + 1, replaceDecoration);
+                  }
+                }
+              }
+            }
             const code_extention = plugin.settings.codeExtension;
             const code_block_regex = new RegExp(`(\`\`\`${code_extention}
 )([\\s\\S]*?)(\`\`\`)`, "gmi");
