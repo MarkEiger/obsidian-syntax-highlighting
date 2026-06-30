@@ -23,15 +23,19 @@
     {
       "name": "Magenta",
       "value": "#ff00ff"
+    },
+    {
+      "name": "Red",
+      "value": "#edb0ed"
     }
   ],
   "lexersSettings": {
-    "e14e987b3f3ce4e35fc5d65105a5d3a31fc92be81cbc7d1ee7eba6577bc5d006": {
-      "extention": "nmaps",
+    "677285610ce6acc60f85cd52506a530cb86abb1b997b39a50ad08a9eb9a4d4f2": {
+      "extention": "example",
       "colourMappings": {
         "word": {
-          "name": "custom",
-          "value": "#ffab8f"
+          "name": "Red",
+          "value": "#edb0ed"
         }
       },
       "enabled": true

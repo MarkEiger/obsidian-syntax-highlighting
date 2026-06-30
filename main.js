@@ -200,6 +200,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           dropdown.onChange(async (value) => {
             if (value === "custom") {
               colorComp.setDisabled(false);
+              colorComp.colorPickerEl.click();
             } else {
               const picked = palette.find((c) => c.value === value);
               mappings[tokenType] = { name: picked.name, value: picked.value };
@@ -213,12 +214,37 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           color.setValue(colour.value).setDisabled(!isCustom).onChange(async (value) => {
             mappings[tokenType] = { name: "custom", value };
             await this.plugin.saveSettings();
+            new ColourNameModal(this.plugin.app, value, async (name) => {
+              const colour2 = { name, value };
+              this.plugin.settings.coloursPallete.push(colour2);
+              mappings[tokenType] = colour2;
+              await this.plugin.saveSettings();
+            }).open();
           });
         });
       }
       ;
     }
     ;
+  }
+};
+var ColourNameModal = class extends import_obsidian2.Modal {
+  constructor(app, value, onSubmit) {
+    super(app);
+    this.value = value;
+    this.onSubmit = onSubmit;
+    this.name = "";
+  }
+  onOpen() {
+    this.titleEl.setText("Name this colour");
+    new import_obsidian2.Setting(this.contentEl).setName("Palette name").addText((text) => text.setPlaceholder(this.value).onChange((v) => this.name = v));
+    new import_obsidian2.Setting(this.contentEl).addButton((btn) => btn.setButtonText("Add to palette").setCta().onClick(() => {
+      this.close();
+      this.onSubmit(this.name.trim() || this.value);
+    }));
+  }
+  onClose() {
+    this.contentEl.empty();
   }
 };
 
@@ -276,7 +302,7 @@ var exampleLexer = {
     // addCustomColour()
   },
   tokenize(input) {
-    const target = /\w+/gi;
+    const target = /color: \w+/gi;
     let match;
     const tokens = [];
     while ((match = target.exec(input)) !== null) {
@@ -307,15 +333,18 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
     this.addSettingTab(new LetterASettingTab(this.app, this));
   }
   async loadLexers() {
+    const presentLexersSettings = {};
     for (const lexer of lexers) {
       const hash = await hashLexer(lexer);
       let lexerSettings = this.settings.lexersSettings[hash];
       if (!lexerSettings) {
         lexerSettings = new LexerSettings(lexer.name, lexer.defaultColoursMapping);
-        this.settings.lexersSettings[hash] = lexerSettings;
       }
+      presentLexersSettings[hash] = lexerSettings;
       this.lexers[lexerSettings.extention] = { lexer, hash };
     }
+    this.settings.lexersSettings = presentLexersSettings;
+    await this.saveSettings();
   }
   async loadSettings() {
     console.log("loading data");

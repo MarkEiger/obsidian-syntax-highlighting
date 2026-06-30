@@ -1,4 +1,4 @@
-import { ColorComponent, Setting } from "obsidian";
+import { App, ColorComponent, Modal, Setting } from "obsidian";
 import { BaseSettingsTab } from "./base_settings";
 
 export class LexerSettingsTab extends BaseSettingsTab {
@@ -93,8 +93,9 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						dropdown.setValue(isCustom ? 'custom' : colour.value);
 						dropdown.onChange(async value => {
 							if (value === 'custom') {
-								// let the user pick any colour with the picker
+								// enable the picker and open it immediately
 								colorComp.setDisabled(false);
+								(colorComp as any).colorPickerEl.click();
 							} else {
 								const picked = palette.find(c => c.value === value)!;
 								mappings[tokenType] = { name: picked.name, value: picked.value };
@@ -112,9 +113,42 @@ export class LexerSettingsTab extends BaseSettingsTab {
 							.onChange(async value => {
 								mappings[tokenType] = { name: 'custom', value: value };
 								await this.plugin.saveSettings();
+								// ask for a name and add the colour to the palette
+								new ColourNameModal(this.plugin.app, value, async name => {
+									const colour = { name, value };
+									this.plugin.settings.coloursPallete.push(colour);
+									mappings[tokenType] = colour;
+									await this.plugin.saveSettings();
+								}).open();
 							});
 					});
 			};
 		};
+	}
+}
+
+class ColourNameModal extends Modal {
+	private name = '';
+	constructor(app: App, private value: string, private onSubmit: (name: string) => void) {
+		super(app);
+	}
+	onOpen() {
+		this.titleEl.setText('Name this colour');
+		new Setting(this.contentEl)
+			.setName('Palette name')
+			.addText(text => text
+				.setPlaceholder(this.value)
+				.onChange(v => this.name = v));
+		new Setting(this.contentEl)
+			.addButton(btn => btn
+				.setButtonText('Add to palette')
+				.setCta()
+				.onClick(() => {
+					this.close();
+					this.onSubmit(this.name.trim() || this.value);
+				}));
+	}
+	onClose() {
+		this.contentEl.empty();
 	}
 }

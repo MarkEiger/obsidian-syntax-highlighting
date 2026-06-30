@@ -11,7 +11,7 @@ export const exampleLexer: Lexer = {
         // addCustomColour()
     },
     tokenize(input: string): Token[]{
-        const target = /\w+/gi;
+        const target = /color: \w+/gi;
         let match;
         const tokens: Token[] = [];
         while ((match = target.exec(input)) !== null) {

@@ -40,16 +40,21 @@ export default class LetterAPlugin extends Plugin {
 	}
 
 	async loadLexers(){
+		const presentLexersSettings: Record<string, LexerSettings> = {};
+
 		for (const lexer of lexers){
 			const hash = await hashLexer(lexer);
 			let lexerSettings: LexerSettings = this.settings.lexersSettings[hash];
 			if (!lexerSettings)
 			{
 				lexerSettings = new LexerSettings(lexer.name, lexer.defaultColoursMapping)
-				this.settings.lexersSettings[hash] = lexerSettings
+				// this.settings.lexersSettings[hash] = lexerSettings
 			}
+			presentLexersSettings[hash] = lexerSettings;
 			this.lexers[lexerSettings.extention] = {lexer: lexer, hash: hash};
 		}
+		this.settings.lexersSettings = presentLexersSettings;
+		await this.saveSettings();
 	}
 
 	async loadSettings() {
@@ -96,8 +101,6 @@ export default class LetterAPlugin extends Plugin {
 
 				buildDecorations(view: EditorView): DecorationSet {
 					const builder = new RangeSetBuilder<Decoration>();
-
-					// Define a widget that displays "b"
 					class BWidget extends WidgetType {
 						text: string;
 						colour: Colour;
