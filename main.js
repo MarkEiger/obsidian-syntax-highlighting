@@ -189,6 +189,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
       for (const [tokenType, colour] of entries) {
         let colorComp;
         let dropdownComp;
+        let programmatic = false;
         let cssClass = index === count - 1 ? "tokens-colors-footer" : "tokens-colors-element";
         index++;
         const isCustom = !palette.some((c) => c.value === colour.value);
@@ -206,7 +207,9 @@ var LexerSettingsTab = class extends BaseSettingsTab {
             } else {
               const picked = palette.find((c) => c.value === value);
               mappings[tokenType] = { name: picked.name, value: picked.value };
+              programmatic = true;
               colorComp.setValue(picked.value);
+              programmatic = false;
               colorComp.setDisabled(true);
             }
             await this.plugin.saveSettings();
@@ -214,8 +217,12 @@ var LexerSettingsTab = class extends BaseSettingsTab {
         }).addColorPicker((color) => {
           colorComp = color;
           color.setValue(colour.value).setDisabled(!isCustom).onChange(async (value) => {
+            if (programmatic)
+              return;
             if (dropdownComp.getValue() !== "custom")
               return;
+            const previous = mappings[tokenType];
+            const prevIsCustom = !palette.some((c) => c.value === previous.value);
             mappings[tokenType] = { name: "custom", value };
             await this.plugin.saveSettings();
             const taken = palette.map((c) => c.name);
@@ -226,6 +233,14 @@ var LexerSettingsTab = class extends BaseSettingsTab {
               await this.plugin.saveSettings();
               dropdownComp.addOption(value, name);
               dropdownComp.setValue(value);
+            }, async () => {
+              mappings[tokenType] = previous;
+              dropdownComp.setValue(prevIsCustom ? "custom" : previous.value);
+              programmatic = true;
+              colorComp.setValue(previous.value);
+              programmatic = false;
+              colorComp.setDisabled(!prevIsCustom);
+              await this.plugin.saveSettings();
             }).open();
           });
         });
@@ -236,12 +251,14 @@ var LexerSettingsTab = class extends BaseSettingsTab {
   }
 };
 var ColourNameModal = class extends import_obsidian2.Modal {
-  constructor(app, value, taken, onSubmit) {
+  constructor(app, value, taken, onSubmit, onCancel) {
     super(app);
     this.value = value;
     this.taken = taken;
     this.onSubmit = onSubmit;
+    this.onCancel = onCancel;
     this.name = "";
+    this.submitted = false;
   }
   onOpen() {
     this.titleEl.setText("Name this colour");
@@ -254,12 +271,15 @@ var ColourNameModal = class extends import_obsidian2.Modal {
         error.setText(`A colour named "${name}" already exists.`);
         return;
       }
+      this.submitted = true;
       this.close();
       this.onSubmit(name);
     }));
   }
   onClose() {
     this.contentEl.empty();
+    if (!this.submitted)
+      this.onCancel();
   }
 };
 

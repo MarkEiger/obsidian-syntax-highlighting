@@ -77,6 +77,8 @@ export class LexerSettingsTab extends BaseSettingsTab {
 			for (const [tokenType, colour] of entries){
 				let colorComp: ColorComponent;
 				let dropdownComp: DropdownComponent;
+				// guards the picker's onChange against programmatic setValue() calls
+				let programmatic = false;
 				// handle last entry for the rounded up corners
 				let cssClass = index === count - 1 ? 'tokens-colors-footer' : 'tokens-colors-element';
 				index++;
@@ -101,7 +103,9 @@ export class LexerSettingsTab extends BaseSettingsTab {
 							} else {
 								const picked = palette.find(c => c.value === value)!;
 								mappings[tokenType] = { name: picked.name, value: picked.value };
+								programmatic = true;
 								colorComp.setValue(picked.value);
+								programmatic = false;
 								colorComp.setDisabled(true);
 							}
 							await this.plugin.saveSettings();
@@ -113,9 +117,14 @@ export class LexerSettingsTab extends BaseSettingsTab {
 							.setValue(colour.value)
 							.setDisabled(!isCustom)
 							.onChange(async value => {
-								// only react to genuine custom picks; ignore the programmatic
-								// setValue() that fires when a palette colour is selected
+								// ignore programmatic setValue() (palette selection / revert)
+								if (programmatic) return;
+								// only react to genuine custom picks
 								if (dropdownComp.getValue() !== 'custom') return;
+								// remember the colour active before this custom pick, so we
+								// can roll back if the user dismisses the naming modal
+								const previous = mappings[tokenType];
+								const prevIsCustom = !palette.some(c => c.value === previous.value);
 								mappings[tokenType] = { name: 'custom', value: value };
 								await this.plugin.saveSettings();
 								// ask for a (unique) name and add the colour to the palette
@@ -128,6 +137,15 @@ export class LexerSettingsTab extends BaseSettingsTab {
 									// reflect the new palette colour in the dropdown
 									dropdownComp.addOption(value, name);
 									dropdownComp.setValue(value);
+								}, async () => {
+									// cancelled: revert to the previous colour
+									mappings[tokenType] = previous;
+									dropdownComp.setValue(prevIsCustom ? 'custom' : previous.value);
+									programmatic = true;
+									colorComp.setValue(previous.value);
+									programmatic = false;
+									colorComp.setDisabled(!prevIsCustom);
+									await this.plugin.saveSettings();
 								}).open();
 							});
 					});
@@ -138,7 +156,8 @@ export class LexerSettingsTab extends BaseSettingsTab {
 
 class ColourNameModal extends Modal {
 	private name = '';
-	constructor(app: App, private value: string, private taken: string[], private onSubmit: (name: string) => void) {
+	private submitted = false;
+	constructor(app: App, private value: string, private taken: string[], private onSubmit: (name: string) => void, private onCancel: () => void) {
 		super(app);
 	}
 	onOpen() {
@@ -160,11 +179,14 @@ class ColourNameModal extends Modal {
 						error.setText(`A colour named "${name}" already exists.`);
 						return;
 					}
+					this.submitted = true;
 					this.close();
 					this.onSubmit(name);
 				}));
 	}
 	onClose() {
 		this.contentEl.empty();
+		// dismissed without adding to the palette -> let the caller revert
+		if (!this.submitted) this.onCancel();
 	}
 }

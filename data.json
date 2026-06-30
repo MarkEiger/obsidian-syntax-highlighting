@@ -27,6 +27,10 @@
     {
       "name": "Bright Pink",
       "value": "#ffc2ff"
+    },
+    {
+      "name": "Turquoize",
+      "value": "#70ffc8"
     }
   ],
   "lexersSettings": {
@@ -34,8 +38,8 @@
       "extention": "example",
       "colourMappings": {
         "word": {
-          "name": "Bright Pink",
-          "value": "#ffc2ff"
+          "name": "Turquoize",
+          "value": "#70ffc8"
         }
       },
       "enabled": true
