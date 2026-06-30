@@ -25,8 +25,8 @@
       "value": "#ff00ff"
     },
     {
-      "name": "Red",
-      "value": "#edb0ed"
+      "name": "Bright Pink",
+      "value": "#ffc2ff"
     }
   ],
   "lexersSettings": {
@@ -34,8 +34,8 @@
       "extention": "example",
       "colourMappings": {
         "word": {
-          "name": "Red",
-          "value": "#edb0ed"
+          "name": "Bright Pink",
+          "value": "#ffc2ff"
         }
       },
       "enabled": true

@@ -1,4 +1,4 @@
-import { App, ColorComponent, Modal, Setting } from "obsidian";
+import { App, ColorComponent, DropdownComponent, Modal, Setting } from "obsidian";
 import { BaseSettingsTab } from "./base_settings";
 
 export class LexerSettingsTab extends BaseSettingsTab {
@@ -76,6 +76,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 			let index = 0;
 			for (const [tokenType, colour] of entries){
 				let colorComp: ColorComponent;
+				let dropdownComp: DropdownComponent;
 				// handle last entry for the rounded up corners
 				let cssClass = index === count - 1 ? 'tokens-colors-footer' : 'tokens-colors-element';
 				index++;
@@ -89,7 +90,8 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						for (const option of palette) {
 							dropdown.addOption(option.value, option.name);
 						}
-						dropdown.addOption('custom', 'Custom Color');
+						dropdownComp = dropdown;
+							dropdown.addOption('custom', 'Custom Color');
 						dropdown.setValue(isCustom ? 'custom' : colour.value);
 						dropdown.onChange(async value => {
 							if (value === 'custom') {
@@ -111,14 +113,21 @@ export class LexerSettingsTab extends BaseSettingsTab {
 							.setValue(colour.value)
 							.setDisabled(!isCustom)
 							.onChange(async value => {
+								// only react to genuine custom picks; ignore the programmatic
+								// setValue() that fires when a palette colour is selected
+								if (dropdownComp.getValue() !== 'custom') return;
 								mappings[tokenType] = { name: 'custom', value: value };
 								await this.plugin.saveSettings();
-								// ask for a name and add the colour to the palette
-								new ColourNameModal(this.plugin.app, value, async name => {
+								// ask for a (unique) name and add the colour to the palette
+								const taken = palette.map(c => c.name);
+								new ColourNameModal(this.plugin.app, value, taken, async name => {
 									const colour = { name, value };
 									this.plugin.settings.coloursPallete.push(colour);
 									mappings[tokenType] = colour;
 									await this.plugin.saveSettings();
+									// reflect the new palette colour in the dropdown
+									dropdownComp.addOption(value, name);
+									dropdownComp.setValue(value);
 								}).open();
 							});
 					});
@@ -129,7 +138,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 
 class ColourNameModal extends Modal {
 	private name = '';
-	constructor(app: App, private value: string, private onSubmit: (name: string) => void) {
+	constructor(app: App, private value: string, private taken: string[], private onSubmit: (name: string) => void) {
 		super(app);
 	}
 	onOpen() {
@@ -139,13 +148,20 @@ class ColourNameModal extends Modal {
 			.addText(text => text
 				.setPlaceholder(this.value)
 				.onChange(v => this.name = v));
+		const error = this.contentEl.createDiv({ cls: 'setting-item-description' });
+		error.style.color = 'var(--text-error)';
 		new Setting(this.contentEl)
 			.addButton(btn => btn
 				.setButtonText('Add to palette')
 				.setCta()
 				.onClick(() => {
+					const name = this.name.trim() || this.value;
+					if (this.taken.some(t => t.toLowerCase() === name.toLowerCase())) {
+						error.setText(`A colour named "${name}" already exists.`);
+						return;
+					}
 					this.close();
-					this.onSubmit(this.name.trim() || this.value);
+					this.onSubmit(name);
 				}));
 	}
 	onClose() {

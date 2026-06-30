@@ -188,6 +188,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
       let index = 0;
       for (const [tokenType, colour] of entries) {
         let colorComp;
+        let dropdownComp;
         let cssClass = index === count - 1 ? "tokens-colors-footer" : "tokens-colors-element";
         index++;
         const isCustom = !palette.some((c) => c.value === colour.value);
@@ -195,6 +196,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           for (const option of palette) {
             dropdown.addOption(option.value, option.name);
           }
+          dropdownComp = dropdown;
           dropdown.addOption("custom", "Custom Color");
           dropdown.setValue(isCustom ? "custom" : colour.value);
           dropdown.onChange(async (value) => {
@@ -212,13 +214,18 @@ var LexerSettingsTab = class extends BaseSettingsTab {
         }).addColorPicker((color) => {
           colorComp = color;
           color.setValue(colour.value).setDisabled(!isCustom).onChange(async (value) => {
+            if (dropdownComp.getValue() !== "custom")
+              return;
             mappings[tokenType] = { name: "custom", value };
             await this.plugin.saveSettings();
-            new ColourNameModal(this.plugin.app, value, async (name) => {
+            const taken = palette.map((c) => c.name);
+            new ColourNameModal(this.plugin.app, value, taken, async (name) => {
               const colour2 = { name, value };
               this.plugin.settings.coloursPallete.push(colour2);
               mappings[tokenType] = colour2;
               await this.plugin.saveSettings();
+              dropdownComp.addOption(value, name);
+              dropdownComp.setValue(value);
             }).open();
           });
         });
@@ -229,18 +236,26 @@ var LexerSettingsTab = class extends BaseSettingsTab {
   }
 };
 var ColourNameModal = class extends import_obsidian2.Modal {
-  constructor(app, value, onSubmit) {
+  constructor(app, value, taken, onSubmit) {
     super(app);
     this.value = value;
+    this.taken = taken;
     this.onSubmit = onSubmit;
     this.name = "";
   }
   onOpen() {
     this.titleEl.setText("Name this colour");
     new import_obsidian2.Setting(this.contentEl).setName("Palette name").addText((text) => text.setPlaceholder(this.value).onChange((v) => this.name = v));
+    const error = this.contentEl.createDiv({ cls: "setting-item-description" });
+    error.style.color = "var(--text-error)";
     new import_obsidian2.Setting(this.contentEl).addButton((btn) => btn.setButtonText("Add to palette").setCta().onClick(() => {
+      const name = this.name.trim() || this.value;
+      if (this.taken.some((t) => t.toLowerCase() === name.toLowerCase())) {
+        error.setText(`A colour named "${name}" already exists.`);
+        return;
+      }
       this.close();
-      this.onSubmit(this.name.trim() || this.value);
+      this.onSubmit(name);
     }));
   }
   onClose() {
