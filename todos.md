@@ -29,7 +29,7 @@ for each lexer:
     adding a custom colour from within a lexer adds it to its private pool
     in the dropdown have 2 sub drop down, global and private pallete
 
-also add isCustom, so that only custom can be deleted, 
+also add isCustom, so that only custom can be changed in any way, 
 for lexer supplied colour isCustom is False
 also add a unique id to each colour generated when it is added, so its stable across changes
 
@@ -39,3 +39,23 @@ also have for each lexer:
 
 and add a global pallete that includes all colours for O(1) lookup
 possibly need ro resturct the pallete class to support this
+
+
+so for the model i will use for storage is
+```ts
+type Colour = {
+    name: string,
+    value: string,
+    is_custom: boolean
+}
+```
+
+for O(1) access:
+```ts
+settings.colours = Record<string, Colour> //uuid to actual Colour
+```
+
+for organization:
+```ts
+settings.lexers[n].colours = string // the uuid of the colour
+```

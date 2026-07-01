@@ -26,19 +26,40 @@ export class LetterASettingTab extends PluginSettingTab {
 }
 
 export type Colour = {
+	// stable unique id — token mappings reference colours by id, never by
+	// name or value, so renames and recolours don't break the link
+	id: string;
 	name: string;
 	value: string;
+	// true  = user-created: renamable, deletable while unused
+	// false = supplied by a lexer: name frozen (it's the reconciliation key
+	//         against the lexer's declaration), cannot be deleted
+	isCustom: boolean;
 }
 
-export type ColourMapping = Record<string, Colour>;
+export function newColourId(): string {
+	return crypto.randomUUID();
+}
+
+// tokenType -> colour id (resolved against the global palette + the
+// owning lexer's private pool)
+export type ColourMapping = Record<string, string>;
 
 // move all this code to the apropriate filess
 export class LexerSettings {
+	// the lexer's declared id — how stored settings re-attach to a
+	// (possibly updated) lexer across loads
+	lexerId: string;
 	extention: string;
-	colourMappings: ColourMapping;
 	enabled: boolean;
-	constructor(extention: string, colourMappings: ColourMapping, enabled?: boolean){
+	// this lexer's namespaced colours: supplied ones (isCustom false)
+	// plus the user's custom picks (isCustom true)
+	privatePool: Colour[];
+	colourMappings: ColourMapping;
+	constructor(lexerId: string, extention: string, privatePool: Colour[], colourMappings: ColourMapping, enabled?: boolean){
+		this.lexerId = lexerId;
 		this.extention = extention;
+		this.privatePool = privatePool;
 		this.colourMappings = colourMappings;
 		this.enabled = enabled ?? true;
 	}

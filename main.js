@@ -28,12 +28,12 @@ __export(main_exports, {
   refreshHighlight: () => refreshHighlight
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
 
 // settings/settings.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // settings/pallet.ts
 var import_obsidian = require("obsidian");
@@ -51,12 +51,12 @@ var BaseSettingsTab = class {
 
 // settings/pallet.ts
 var default_colours = [
-  { name: "Red", value: "#ff0000" },
-  { name: "Green", value: "#00ff00" },
-  { name: "Blue", value: "#0000ff" },
-  { name: "Yellow", value: "#ffff00" },
-  { name: "Cyan", value: "#00ffff" },
-  { name: "Magenta", value: "#ff00ff" }
+  { id: "global-red", name: "Red", value: "#ff0000", isCustom: true },
+  { id: "global-green", name: "Green", value: "#00ff00", isCustom: true },
+  { id: "global-blue", name: "Blue", value: "#0000ff", isCustom: true },
+  { id: "global-yellow", name: "Yellow", value: "#ffff00", isCustom: true },
+  { id: "global-cyan", name: "Cyan", value: "#00ffff", isCustom: true },
+  { id: "global-magenta", name: "Magenta", value: "#ff00ff", isCustom: true }
 ];
 var PaletteSettingsTab = class extends BaseSettingsTab {
   display() {
@@ -112,7 +112,11 @@ var PaletteSettingsTab = class extends BaseSettingsTab {
           });
         }).addExtraButton((btn) => {
           const inUse = this.colourInUse(colorValue);
-          btn.setIcon("trash").setTooltip(inUse ? "In use by a token type \u2014 cannot delete" : "Remove").onClick(async () => {
+          btn.setIcon("trash").setTooltip(!colorValue.isCustom ? "Supplied colours cannot be deleted" : inUse ? "In use by a token type \u2014 cannot delete" : "Remove").onClick(async () => {
+            if (!colorValue.isCustom) {
+              new import_obsidian.Notice(`Cannot delete "${colorValue.name}": it is supplied by a lexer.`);
+              return;
+            }
             if (this.colourInUse(colorValue)) {
               new import_obsidian.Notice(`Cannot delete "${colorValue.name}": it is in use by a token type.`);
               return;
@@ -127,39 +131,269 @@ var PaletteSettingsTab = class extends BaseSettingsTab {
     renderColors();
     new import_obsidian.Setting(colorsContainer).setName("Add Color").addButton((btn) => {
       btn.setButtonText("Add").onClick(async () => {
-        plugin.settings.coloursPallete.push({ name: "New Color", value: "#ffffff" });
+        plugin.settings.coloursPallete.push({ id: newColourId(), name: "New Color", value: "#ffffff", isCustom: true });
         await plugin.saveSettings();
         this.refresh();
       });
     }).setClass("tokens-colors-footer");
   }
-  // a colour is "in use" if any lexer's token mapping references it (matched
-  // by value, the same way the dropdowns resolve a mapping to a palette
-  // colour). Includes disabled lexers.
+  // a colour is "in use" if any lexer's token mapping references its id.
+  // Includes disabled lexers.
   colourInUse(colour) {
-    return Object.values(this.plugin.settings.lexersSettings).some((ls) => Object.values(ls.colourMappings).some((c) => c.value === colour.value));
+    return Object.values(this.plugin.settings.lexersSettings).some((ls) => Object.values(ls.colourMappings).includes(colour.id));
   }
 };
 
 // settings/lexers.ts
+var import_obsidian3 = require("obsidian");
+
+// settings/modals.ts
 var import_obsidian2 = require("obsidian");
+var ColourNameModal = class extends import_obsidian2.Modal {
+  constructor(app, value, taken, onSubmit, onCancel) {
+    super(app);
+    this.value = value;
+    this.taken = taken;
+    this.onSubmit = onSubmit;
+    this.onCancel = onCancel;
+    this.name = "";
+    this.submitted = false;
+  }
+  onOpen() {
+    this.titleEl.setText("Name this colour");
+    new import_obsidian2.Setting(this.contentEl).setName("Colour name").addText((text) => text.setPlaceholder(this.value).onChange((v) => this.name = v));
+    const error = this.contentEl.createDiv({ cls: "setting-item-description" });
+    error.style.color = "var(--text-error)";
+    new import_obsidian2.Setting(this.contentEl).addButton((btn) => btn.setButtonText("Add").setCta().onClick(() => {
+      const name = this.name.trim() || this.value;
+      if (this.taken.some((t) => t.toLowerCase() === name.toLowerCase())) {
+        error.setText(`A colour named "${name}" already exists.`);
+        return;
+      }
+      this.submitted = true;
+      this.close();
+      this.onSubmit(name);
+    }));
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.submitted)
+      this.onCancel();
+  }
+};
+var RestoreDefaultsModal = class extends import_obsidian2.Modal {
+  constructor(app, lexerName, onRestore) {
+    super(app);
+    this.lexerName = lexerName;
+    this.onRestore = onRestore;
+  }
+  onOpen() {
+    this.titleEl.setText(`Restore "${this.lexerName}" colours to defaults`);
+    this.contentEl.createEl("p", {
+      text: "Supplied colour values and all token mappings will be reset to the lexer's defaults. The global palette, the extension name and the enabled state are not touched."
+    });
+    this.contentEl.createEl("p", {
+      text: "What should happen to the custom colours you added to this lexer?"
+    });
+    new import_obsidian2.Setting(this.contentEl).addButton((btn) => btn.setButtonText("Keep them").setCta().onClick(() => {
+      this.close();
+      this.onRestore(true);
+    })).addButton((btn) => btn.setButtonText("Delete them").setWarning().onClick(() => {
+      this.close();
+      this.onRestore(false);
+    })).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var CopyCollisionModal = class extends import_obsidian2.Modal {
+  constructor(app, existingName, taken, onDone) {
+    super(app);
+    this.taken = taken;
+    this.onDone = onDone;
+    this.name = existingName;
+  }
+  onOpen() {
+    this.titleEl.setText("Name already in the global palette");
+    this.contentEl.createEl("p", {
+      text: `A global colour named "${this.name}" already exists. Override its value, or add this colour under a new name.`
+    });
+    new import_obsidian2.Setting(this.contentEl).setName("New name").addText((text) => text.setValue(this.name).onChange((v) => this.name = v));
+    const error = this.contentEl.createDiv({ cls: "setting-item-description" });
+    error.style.color = "var(--text-error)";
+    new import_obsidian2.Setting(this.contentEl).addButton((btn) => btn.setButtonText("Override existing").setWarning().onClick(() => {
+      this.close();
+      this.onDone("override");
+    })).addButton((btn) => btn.setButtonText("Add with new name").setCta().onClick(() => {
+      const name = this.name.trim();
+      if (!name || this.taken.some((t) => t.toLowerCase() === name.toLowerCase())) {
+        error.setText(`"${name}" is already taken \u2014 pick another name or override.`);
+        return;
+      }
+      this.close();
+      this.onDone("rename", name);
+    }));
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var PrivatePaletteModal = class extends import_obsidian2.Modal {
+  constructor(plugin, lexerSettings, refresh) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.lexerSettings = lexerSettings;
+    this.refresh = refresh;
+  }
+  onOpen() {
+    this.render();
+  }
+  render() {
+    const { contentEl, lexerSettings } = this;
+    contentEl.empty();
+    this.titleEl.setText(`"${lexerSettings.extention}" private palette`);
+    if (!lexerSettings.privatePool.length) {
+      contentEl.createEl("p", { text: "This lexer has no private colours." });
+      return;
+    }
+    for (const colour of lexerSettings.privatePool) {
+      const row = new import_obsidian2.Setting(contentEl).setName(colour.name).setDesc(colour.isCustom ? "Custom colour" : "Supplied by the lexer");
+      row.addColorPicker((picker) => picker.setValue(colour.value).onChange(async (value) => {
+        colour.value = value;
+        await this.plugin.saveSettings();
+        this.refresh();
+      }));
+      row.addExtraButton((btn) => btn.setIcon("copy").setTooltip("Copy to global palette").onClick(() => this.copyToGlobal(colour)));
+      if (colour.isCustom) {
+        const inUse = this.inUse(colour);
+        row.addExtraButton((btn) => btn.setIcon("trash").setTooltip(inUse ? "In use by a token type \u2014 cannot delete" : "Delete").onClick(async () => {
+          if (this.inUse(colour)) {
+            new import_obsidian2.Notice(`Cannot delete "${colour.name}": it is in use by a token type.`);
+            return;
+          }
+          const pool = this.lexerSettings.privatePool;
+          pool.splice(pool.indexOf(colour), 1);
+          await this.plugin.saveSettings();
+          this.refresh();
+          this.render();
+        }));
+      }
+    }
+  }
+  inUse(colour) {
+    return Object.values(this.lexerSettings.colourMappings).includes(colour.id);
+  }
+  copyToGlobal(colour) {
+    const palette = this.plugin.settings.coloursPallete;
+    const clash = palette.find((c) => c.name.toLowerCase() === colour.name.toLowerCase());
+    if (!clash) {
+      palette.push({ id: newColourId(), name: colour.name, value: colour.value, isCustom: true });
+      void this.plugin.saveSettings().then(() => this.refresh());
+      new import_obsidian2.Notice(`"${colour.name}" added to the global palette.`);
+      return;
+    }
+    new CopyCollisionModal(this.app, clash.name, palette.map((c) => c.name), async (action, name) => {
+      if (action === "override") {
+        clash.value = colour.value;
+        new import_obsidian2.Notice(`Global "${clash.name}" updated.`);
+      } else {
+        palette.push({ id: newColourId(), name, value: colour.value, isCustom: true });
+        new import_obsidian2.Notice(`"${name}" added to the global palette.`);
+      }
+      await this.plugin.saveSettings();
+      this.refresh();
+    }).open();
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
+// lexing/reconcile.ts
+function validateLexer(lexer) {
+  const warnings = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const colour of lexer.requiredColours) {
+    const key = colour.name.toLowerCase();
+    if (seen.has(key)) {
+      warnings.push(`duplicate required colour name "${colour.name}"`);
+    }
+    seen.add(key);
+  }
+  for (const [tokenType, colourName] of Object.entries(lexer.colourMapping)) {
+    if (!lexer.requiredColours.some((c) => c.name === colourName)) {
+      warnings.push(`token type "${tokenType}" maps to undeclared colour "${colourName}"`);
+    }
+  }
+  return warnings;
+}
+function defaultMappings(lexer, pool) {
+  const mappings = {};
+  for (const [tokenType, colourName] of Object.entries(lexer.colourMapping)) {
+    const colour = pool.find((c) => !c.isCustom && c.name === colourName);
+    if (colour) {
+      mappings[tokenType] = colour.id;
+    }
+  }
+  return mappings;
+}
+function seedLexerSettings(lexer) {
+  const pool = lexer.requiredColours.map((c) => ({ id: newColourId(), name: c.name, value: c.value, isCustom: false }));
+  return new LexerSettings2(lexer.id, lexer.name, pool, defaultMappings(lexer, pool));
+}
+function reconcileLexerSettings(settings, lexer) {
+  for (const declared of lexer.requiredColours) {
+    if (!settings.privatePool.some((c) => !c.isCustom && c.name === declared.name)) {
+      settings.privatePool.push({ id: newColourId(), name: declared.name, value: declared.value, isCustom: false });
+    }
+  }
+  const referenced = new Set(Object.values(settings.colourMappings));
+  settings.privatePool = settings.privatePool.filter((c) => c.isCustom || lexer.requiredColours.some((d) => d.name === c.name) || referenced.has(c.id));
+  const defaults = defaultMappings(lexer, settings.privatePool);
+  for (const [tokenType, colourId] of Object.entries(defaults)) {
+    if (!(tokenType in settings.colourMappings)) {
+      settings.colourMappings[tokenType] = colourId;
+    }
+  }
+}
+function restoreLexerDefaults(settings, lexer, keepCustomColours) {
+  for (const colour of settings.privatePool) {
+    if (colour.isCustom)
+      continue;
+    const declared = lexer.requiredColours.find((d) => d.name === colour.name);
+    if (declared) {
+      colour.value = declared.value;
+    }
+  }
+  for (const declared of lexer.requiredColours) {
+    if (!settings.privatePool.some((c) => !c.isCustom && c.name === declared.name)) {
+      settings.privatePool.push({ id: newColourId(), name: declared.name, value: declared.value, isCustom: false });
+    }
+  }
+  settings.privatePool = settings.privatePool.filter((c) => c.isCustom ? keepCustomColours : lexer.requiredColours.some((d) => d.name === c.name));
+  settings.colourMappings = defaultMappings(lexer, settings.privatePool);
+}
+
+// settings/lexers.ts
 var LexerSettingsTab = class extends BaseSettingsTab {
   display() {
     const { containerEl, plugin } = this;
     containerEl.createEl("h2", { text: "Lexers Settings" });
-    for (const [hash, lexerSettings] of Object.entries(plugin.settings.lexersSettings)) {
+    for (const [uuid, lexerSettings] of Object.entries(plugin.settings.lexersSettings)) {
+      const lexer = plugin.lexersByUuid[uuid];
       const lexerDiv = containerEl.createDiv();
-      const header = new import_obsidian2.Setting(lexerDiv).setName(lexerSettings.extention).addText((text) => {
+      const header = new import_obsidian3.Setting(lexerDiv).setName(lexerSettings.extention).addText((text) => {
         const container = text.inputEl.parentElement;
         if (container) {
           container.prepend(createSpan({ text: "Code-Block Extension: " }));
         }
         text.setValue(lexerSettings.extention).onChange(async (value) => {
           const prev_value = lexerSettings.extention;
-          const lexer = plugin.lexers[prev_value];
+          const registered = plugin.lexers[prev_value];
           delete plugin.lexers[prev_value];
           lexerSettings.extention = value;
-          plugin.lexers[value] = lexer;
+          plugin.lexers[value] = registered;
           await plugin.saveSettings();
         });
       }).addToggle((toggle) => {
@@ -168,9 +402,26 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           await this.plugin.saveSettings();
         });
       }).setClass("tokens-colors-header");
+      header.addExtraButton((btn) => {
+        btn.setIcon("more-vertical").setTooltip("More options");
+        btn.extraSettingsEl.addEventListener("click", (evt) => {
+          const menu = new import_obsidian3.Menu();
+          menu.addItem((item) => item.setTitle("Restore default colours").setIcon("rotate-ccw").onClick(() => {
+            new RestoreDefaultsModal(plugin.app, lexerSettings.extention, async (keepCustomColours) => {
+              restoreLexerDefaults(lexerSettings, lexer, keepCustomColours);
+              await plugin.saveSettings();
+              this.refresh();
+            }).open();
+          }));
+          menu.addItem((item) => item.setTitle("View private palette").setIcon("palette").onClick(() => {
+            new PrivatePaletteModal(plugin, lexerSettings, () => this.refresh()).open();
+          }));
+          menu.showAtMouseEvent(evt);
+        });
+      });
       const tokensDiv = lexerDiv.createDiv();
       header.addExtraButton((btn) => {
-        const key = `lexer:${hash}`;
+        const key = `lexer:${uuid}`;
         const apply = (expanded) => {
           if (expanded) {
             tokensDiv.show();
@@ -195,109 +446,78 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           toggle();
         });
       });
-      const palette = this.plugin.settings.coloursPallete;
+      const palette = plugin.settings.coloursPallete;
+      const pool = lexerSettings.privatePool;
       const mappings = lexerSettings.colourMappings;
+      const resolve = (id) => plugin.resolveColour(lexerSettings, id);
       const entries = Object.entries(mappings);
-      const count = entries.length;
-      let index = 0;
-      for (const [tokenType, colour] of entries) {
+      entries.forEach(([tokenType, mappedId], index) => {
         let colorComp;
         let dropdownComp;
         let programmatic = false;
-        let cssClass = index === count - 1 ? "tokens-colors-footer" : "tokens-colors-element";
-        index++;
-        const isCustom = !palette.some((c) => c.value === colour.value);
-        new import_obsidian2.Setting(tokensDiv).setName(`${tokenType} Color`).setClass(cssClass).addDropdown((dropdown) => {
-          dropdown.addOption("custom", "Custom Colour");
-          for (const option of palette) {
-            dropdown.addOption(option.value, option.name);
-          }
+        const cssClass = index === entries.length - 1 ? "tokens-colors-footer" : "tokens-colors-element";
+        const current = resolve(mappedId);
+        new import_obsidian3.Setting(tokensDiv).setName(`${tokenType} Color`).setClass(cssClass).addDropdown((dropdown) => {
           dropdownComp = dropdown;
-          dropdown.setValue(isCustom ? "custom" : colour.value);
-          dropdown.onChange(async (value) => {
-            if (value === "custom") {
+          dropdown.addOption("custom", "Custom Colour");
+          const addGroup = (label, colours) => {
+            if (!colours.length)
+              return;
+            const group = dropdown.selectEl.createEl("optgroup", { attr: { label } });
+            for (const c of colours) {
+              group.createEl("option", { value: c.id, text: c.name });
+            }
+          };
+          addGroup("Global palette", palette);
+          addGroup("Private colours", pool);
+          dropdown.setValue(current ? current.id : "custom");
+          dropdown.onChange(async (id) => {
+            var _a, _b;
+            if (id === "custom") {
               colorComp.setDisabled(false);
               colorComp.colorPickerEl.click();
-            } else {
-              const picked = palette.find((c) => c.value === value);
-              mappings[tokenType] = { name: picked.name, value: picked.value };
-              programmatic = true;
-              colorComp.setValue(picked.value);
-              programmatic = false;
-              colorComp.setDisabled(true);
+              return;
             }
-            await this.plugin.saveSettings();
+            mappings[tokenType] = id;
+            programmatic = true;
+            colorComp.setValue((_b = (_a = resolve(id)) == null ? void 0 : _a.value) != null ? _b : "#ffffff");
+            programmatic = false;
+            colorComp.setDisabled(true);
+            await plugin.saveSettings();
           });
         }).addColorPicker((color) => {
+          var _a;
           colorComp = color;
-          color.setValue(colour.value).setDisabled(!isCustom).onChange(async (value) => {
+          color.setValue((_a = current == null ? void 0 : current.value) != null ? _a : "#ffffff").setDisabled(true).onChange((value) => {
             if (programmatic)
               return;
             if (dropdownComp.getValue() !== "custom")
               return;
-            const previous = mappings[tokenType];
-            const prevIsCustom = !palette.some((c) => c.value === previous.value);
-            mappings[tokenType] = { name: "custom", value };
-            await this.plugin.saveSettings();
-            const taken = palette.map((c) => c.name);
-            new ColourNameModal(this.plugin.app, value, taken, async (name) => {
-              const colour2 = { name, value };
-              this.plugin.settings.coloursPallete.push(colour2);
-              mappings[tokenType] = colour2;
-              await this.plugin.saveSettings();
+            const previousId = mappings[tokenType];
+            new ColourNameModal(plugin.app, value, pool.map((c) => c.name), async (name) => {
+              const colour = { id: newColourId(), name, value, isCustom: true };
+              pool.push(colour);
+              mappings[tokenType] = colour.id;
+              await plugin.saveSettings();
               this.refresh();
-            }, async () => {
-              mappings[tokenType] = previous;
-              dropdownComp.setValue(prevIsCustom ? "custom" : previous.value);
+            }, () => {
+              var _a2, _b;
+              dropdownComp.setValue(previousId);
               programmatic = true;
-              colorComp.setValue(previous.value);
+              colorComp.setValue((_b = (_a2 = resolve(previousId)) == null ? void 0 : _a2.value) != null ? _b : "#ffffff");
               programmatic = false;
-              colorComp.setDisabled(!prevIsCustom);
-              await this.plugin.saveSettings();
+              colorComp.setDisabled(true);
             }).open();
           });
         });
-      }
-      ;
+      });
     }
     ;
   }
 };
-var ColourNameModal = class extends import_obsidian2.Modal {
-  constructor(app, value, taken, onSubmit, onCancel) {
-    super(app);
-    this.value = value;
-    this.taken = taken;
-    this.onSubmit = onSubmit;
-    this.onCancel = onCancel;
-    this.name = "";
-    this.submitted = false;
-  }
-  onOpen() {
-    this.titleEl.setText("Name this colour");
-    new import_obsidian2.Setting(this.contentEl).setName("Palette name").addText((text) => text.setPlaceholder(this.value).onChange((v) => this.name = v));
-    const error = this.contentEl.createDiv({ cls: "setting-item-description" });
-    error.style.color = "var(--text-error)";
-    new import_obsidian2.Setting(this.contentEl).addButton((btn) => btn.setButtonText("Add to palette").setCta().onClick(() => {
-      const name = this.name.trim() || this.value;
-      if (this.taken.some((t) => t.toLowerCase() === name.toLowerCase())) {
-        error.setText(`A colour named "${name}" already exists.`);
-        return;
-      }
-      this.submitted = true;
-      this.close();
-      this.onSubmit(name);
-    }));
-  }
-  onClose() {
-    this.contentEl.empty();
-    if (!this.submitted)
-      this.onCancel();
-  }
-};
 
 // settings/settings.ts
-var LetterASettingTab = class extends import_obsidian3.PluginSettingTab {
+var LetterASettingTab = class extends import_obsidian4.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -311,9 +531,14 @@ var LetterASettingTab = class extends import_obsidian3.PluginSettingTab {
     new LexerSettingsTab(this.plugin, containerEl, refresh).display();
   }
 };
-var LexerSettings = class {
-  constructor(extention, colourMappings, enabled) {
+function newColourId() {
+  return crypto.randomUUID();
+}
+var LexerSettings2 = class {
+  constructor(lexerId, extention, privatePool, colourMappings, enabled) {
+    this.lexerId = lexerId;
     this.extention = extention;
+    this.privatePool = privatePool;
     this.colourMappings = colourMappings;
     this.enabled = enabled != null ? enabled : true;
   }
@@ -326,29 +551,19 @@ var DEFAULT_SETTINGS = {
 // lexing/api.ts
 var lexers = [];
 
-// lexing/hashLexer.ts
-function canonicalizeLexer(lexer) {
-  const settings = Object.entries(lexer.defaultColoursMapping).sort(([a], [b]) => a.localeCompare(b)).map(([key, val]) => `${key}=${JSON.stringify(val)}`).join(",");
-  const tokenize = lexer.tokenize.toString().replace(/\s+/g, " ").trim();
-  return `name:${lexer.name}|settings:{${settings}}|tokenize:${tokenize}`;
-}
-async function hashLexer(lexer) {
-  const data = new TextEncoder().encode(canonicalizeLexer(lexer));
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 // lexing/lexers/index.ts
 var lexers_exports = {};
 
 // lexing/lexers/example.ts
 var exampleLexer = {
+  id: "core.example",
+  version: 1,
   name: "example",
-  defaultColoursMapping: {
-    word: default_colours[0]
-    // TODO:
-    // determine how to handle colours added by plugins, maybe add:
-    // addCustomColour()
+  requiredColours: [
+    { name: "Word Red", value: "#ff0000" }
+  ],
+  colourMapping: {
+    word: "Word Red"
   },
   tokenize(input) {
     const target = /color: \w+/gi;
@@ -369,11 +584,14 @@ lexers.push(exampleLexer);
 
 // main.ts
 var refreshHighlight = import_state.StateEffect.define();
-var LetterAPlugin = class extends import_obsidian4.Plugin {
+var LetterAPlugin = class extends import_obsidian5.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
     this.lexers = {};
+    // keyed by code-block extension (render path)
+    this.lexersByUuid = {};
+    // keyed by settings uuid (settings path)
     // transient (not persisted) — which settings sections are expanded, so a
     // re-render of the settings pane preserves the user's open/closed sections
     this.expandedSections = /* @__PURE__ */ new Set();
@@ -385,18 +603,42 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
     this.addSettingTab(new LetterASettingTab(this.app, this));
   }
   async loadLexers() {
+    var _a;
     const presentLexersSettings = {};
+    this.lexers = {};
+    this.lexersByUuid = {};
+    const seenIds = /* @__PURE__ */ new Set();
     for (const lexer of lexers) {
-      const hash = await hashLexer(lexer);
-      let lexerSettings = this.settings.lexersSettings[hash];
-      if (!lexerSettings) {
-        lexerSettings = new LexerSettings(lexer.name, lexer.defaultColoursMapping);
+      if (seenIds.has(lexer.id)) {
+        console.warn(`[lexer ${lexer.id}] duplicate lexer id \u2014 skipping`);
+        continue;
       }
-      presentLexersSettings[hash] = lexerSettings;
-      this.lexers[lexerSettings.extention] = { lexer, hash };
+      seenIds.add(lexer.id);
+      for (const warning of validateLexer(lexer)) {
+        console.warn(`[lexer ${lexer.id}] ${warning}`);
+      }
+      const existing = Object.entries(this.settings.lexersSettings).find(([, ls]) => ls.lexerId === lexer.id);
+      const uuid = (_a = existing == null ? void 0 : existing[0]) != null ? _a : crypto.randomUUID();
+      let lexerSettings = existing == null ? void 0 : existing[1];
+      if (lexerSettings) {
+        reconcileLexerSettings(lexerSettings, lexer);
+      } else {
+        lexerSettings = seedLexerSettings(lexer);
+      }
+      presentLexersSettings[uuid] = lexerSettings;
+      this.lexers[lexerSettings.extention] = { lexer, uuid };
+      this.lexersByUuid[uuid] = lexer;
     }
     this.settings.lexersSettings = presentLexersSettings;
     await this.saveSettings();
+  }
+  // resolve a token mapping's colour id against the global palette and the
+  // owning lexer's private pool (scope is derived, not stored)
+  resolveColour(lexerSettings, colourId) {
+    var _a;
+    if (!colourId)
+      return void 0;
+    return (_a = this.settings.coloursPallete.find((c) => c.id === colourId)) != null ? _a : lexerSettings.privatePool.find((c) => c.id === colourId);
   }
   async loadSettings() {
     console.log("loading data");
@@ -453,12 +695,12 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
             const EXTENTION_ID = 2;
             const BLOCK_TEXT_ID = 3;
             const FOOTER_ID = 4;
-            const lexerWithHash = plugin.lexers[code_block[EXTENTION_ID]];
-            if (!lexerWithHash) {
+            const registered = plugin.lexers[code_block[EXTENTION_ID]];
+            if (!registered) {
               continue;
             }
-            const lexer = lexerWithHash.lexer;
-            const lexerSettings = plugin.settings.lexersSettings[lexerWithHash.hash];
+            const lexer = registered.lexer;
+            const lexerSettings = plugin.settings.lexersSettings[registered.uuid];
             if (!lexerSettings.enabled) {
               continue;
             }
@@ -472,7 +714,7 @@ var LetterAPlugin = class extends import_obsidian4.Plugin {
               const relevant_part = textInsideCodeBlock.slice(last_index);
               const token_index = relevant_part.indexOf(token.text);
               for (let i = 0; i < token.text.length; i++) {
-                const colour = (_a = lexerSettings.colourMappings[token.type]) != null ? _a : default_colours[0];
+                const colour = (_a = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type])) != null ? _a : default_colours[0];
                 const replaceDecoration = import_view.Decoration.replace({
                   widget: new BWidget(relevant_part[token_index + i], colour)
                 });

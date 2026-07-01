@@ -31,16 +31,34 @@
     {
       "name": "dark pink",
       "value": "#8e6b80"
+    },
+    {
+      "id": "909afc7a-15aa-47ac-ba15-9cb8e3bc643c",
+      "name": "purple",
+      "value": "#641f89",
+      "isCustom": true
     }
   ],
   "lexersSettings": {
-    "677285610ce6acc60f85cd52506a530cb86abb1b997b39a50ad08a9eb9a4d4f2": {
+    "cacfc73d-7d1b-4bca-86de-086e0cc5fead": {
+      "lexerId": "core.example",
       "extention": "example",
-      "colourMappings": {
-        "word": {
-          "name": "Cyan",
-          "value": "#00ffff"
+      "privatePool": [
+        {
+          "id": "217107fa-b9e0-4768-a68d-13a57a94fb90",
+          "name": "Word Red",
+          "value": "#ff0000",
+          "isCustom": false
+        },
+        {
+          "id": "e41bb210-6b1d-4b5c-a770-28807e74cb4e",
+          "name": "purple",
+          "value": "#641f89",
+          "isCustom": true
         }
+      ],
+      "colourMappings": {
+        "word": "217107fa-b9e0-4768-a68d-13a57a94fb90"
       },
       "enabled": true
     }

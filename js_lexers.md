@@ -40,18 +40,20 @@ module.exports = {
   // The user can rename the targeted extension later in settings.
   name: 'python',
 
-  // Palette colours this lexer needs. Added to the user's palette *by name*
-  // if a colour with that name doesn't already exist. Never overwrites an
-  // existing palette colour — the user's palette stays the source of truth.
+  // EVERY colour this lexer uses. These become the lexer's PRIVATE pool —
+  // namespaced to this lexer, they never pollute the user's global palette
+  // (the user can promote one via "copy to global palette"). Names are
+  // frozen once shipped: they are the reconciliation key across updates.
   requiredColours: [
     { name: 'Keyword Blue', value: '#569cd6' },
     { name: 'String Green', value: '#6a9955' },
   ],
 
-  // token type -> palette colour NAME.
-  // Every name here must be either an existing palette colour or one declared
-  // above in requiredColours. Every token `type` your tokenizer emits should
-  // have an entry here (unmapped types fall back to the default colour).
+  // token type -> the NAME of a colour declared above in requiredColours.
+  // (Only requiredColours — global palette colours are renamable, so they
+  // can't be referenced by name from a lexer.) Every token `type` your
+  // tokenizer emits should have an entry here (unmapped types fall back to
+  // the default colour).
   colourMapping: {
     keyword: 'Keyword Blue',
     string:  'String Green',
@@ -75,8 +77,8 @@ module.exports = {
 | `id`              | author | Stable, namespaced identity. The match key for installs/updates. |
 | `version`         | author | Integer; bump on contract changes to trigger migrations. |
 | `name`            | author | Display name and default code-block tag. Editable per-vault in settings. |
-| `requiredColours` | author | `{ name, value }[]` — palette colours this lexer needs; added by name if missing. |
-| `colourMapping`   | author | `{ [tokenType]: colourName }` — default colour for each token type. |
+| `requiredColours` | author | `{ name, value }[]` — every colour the lexer uses; becomes its private pool. Names frozen. |
+| `colourMapping`   | author | `{ [tokenType]: requiredColourName }` — default colour for each token type. |
 | `tokenize`        | author | `(input) => Token[]`, where `Token = { text, type }`. |
 
 A `Token` is just a plain object: `{ text: string, type: string }`. No class or
@@ -150,19 +152,25 @@ matching on `id` downstream exactly as above.
 
 ## How colours bind (and reconcile on update)
 
+Each stored colour carries a plugin-minted **id**; token mappings are stored as
+`tokenType → colourId`, so renames and recolours never break the link. Supplied
+colours (`isCustom: false`) keep their author-given name frozen — that name is
+how the stored colour re-attaches to your declaration.
+
 On load (install *or* update), for each lexer:
 
-1. **Ensure palette colours exist** — every entry in `requiredColours` whose
-   `name` isn't already in the user's palette is added. Existing names are left
-   untouched.
+1. **Reconcile the private pool** — declared colours already in the pool (by
+   frozen name) keep their id and the user's tweaked value; newly declared
+   names are added with fresh ids; dropped names are removed unless a token
+   still points at them. The user's custom private colours are untouched.
 2. **Reconcile the mapping** — for each token type in `colourMapping`:
    - if the user already customized that token type, keep their choice;
-   - otherwise seed it from `colourMapping` (resolved to the palette colour of
-     that name).
+   - otherwise seed it from `colourMapping` (resolved within the private pool).
 
 So updating a lexer to add a new token type adds it with a sensible default,
 while preserving everything the user customized. Token types you remove simply
-stop being used.
+stop being used. "Restore default colours" (in the lexer's ⋮ menu) resets
+supplied colour values and all token mappings back to your declaration.
 
 ---
 

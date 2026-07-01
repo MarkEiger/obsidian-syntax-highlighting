@@ -12,12 +12,12 @@ import {
 import { LetterASettingTab, LexerSettings } from 'settings/settings';
 import { LetterAPluginSettings, DEFAULT_SETTINGS, Colour } from 'settings/settings';
 import { Lexer, lexers } from 'lexing/api';
-import { hashLexer } from 'lexing/hashLexer';
+import { validateLexer, seedLexerSettings, reconcileLexerSettings } from 'lexing/reconcile';
 import { default_colours } from 'settings/pallet';
 import 'lexing';
 
-type LexerWithHash = {lexer: Lexer, hash: string};
-type LexersMap = Record<string, LexerWithHash>;
+type RegisteredLexer = {lexer: Lexer, uuid: string};
+type LexersMap = Record<string, RegisteredLexer>;
 
 // Dispatched to every editor when settings change, so the ViewPlugin
 // re-runs buildDecorations even though the document hasn't changed.
@@ -25,7 +25,8 @@ export const refreshHighlight = StateEffect.define<null>();
 // 2. The Main Plugin Class
 export default class LetterAPlugin extends Plugin {
 	settings: LetterAPluginSettings = DEFAULT_SETTINGS;
-	lexers: LexersMap =  {}
+	lexers: LexersMap =  {}          // keyed by code-block extension (render path)
+	lexersByUuid: Record<string, Lexer> = {}  // keyed by settings uuid (settings path)
 	// transient (not persisted) — which settings sections are expanded, so a
 	// re-render of the settings pane preserves the user's open/closed sections
 	expandedSections: Set<string> = new Set();
@@ -44,20 +45,46 @@ export default class LetterAPlugin extends Plugin {
 
 	async loadLexers(){
 		const presentLexersSettings: Record<string, LexerSettings> = {};
+		this.lexers = {};
+		this.lexersByUuid = {};
+		const seenIds = new Set<string>();
 
 		for (const lexer of lexers){
-			const hash = await hashLexer(lexer);
-			let lexerSettings: LexerSettings = this.settings.lexersSettings[hash];
-			if (!lexerSettings)
-			{
-				lexerSettings = new LexerSettings(lexer.name, lexer.defaultColoursMapping)
-				// this.settings.lexersSettings[hash] = lexerSettings
+			if (seenIds.has(lexer.id)) {
+				console.warn(`[lexer ${lexer.id}] duplicate lexer id — skipping`);
+				continue;
 			}
-			presentLexersSettings[hash] = lexerSettings;
-			this.lexers[lexerSettings.extention] = {lexer: lexer, hash: hash};
+			seenIds.add(lexer.id);
+			for (const warning of validateLexer(lexer)) {
+				console.warn(`[lexer ${lexer.id}] ${warning}`);
+			}
+
+			// stored settings re-attach by the lexer's declared id; the uuid
+			// (the settings key) is minted once and survives lexer updates
+			const existing = Object.entries(this.settings.lexersSettings)
+				.find(([, ls]) => ls.lexerId === lexer.id);
+			const uuid = existing?.[0] ?? crypto.randomUUID();
+			let lexerSettings = existing?.[1];
+			if (lexerSettings) {
+				reconcileLexerSettings(lexerSettings, lexer);
+			} else {
+				lexerSettings = seedLexerSettings(lexer);
+			}
+
+			presentLexersSettings[uuid] = lexerSettings;
+			this.lexers[lexerSettings.extention] = {lexer: lexer, uuid: uuid};
+			this.lexersByUuid[uuid] = lexer;
 		}
 		this.settings.lexersSettings = presentLexersSettings;
 		await this.saveSettings();
+	}
+
+	// resolve a token mapping's colour id against the global palette and the
+	// owning lexer's private pool (scope is derived, not stored)
+	resolveColour(lexerSettings: LexerSettings, colourId: string | undefined): Colour | undefined {
+		if (!colourId) return undefined;
+		return this.settings.coloursPallete.find(c => c.id === colourId)
+			?? lexerSettings.privatePool.find(c => c.id === colourId);
 	}
 
 	async loadSettings() {
@@ -130,13 +157,13 @@ export default class LetterAPlugin extends Plugin {
 						const EXTENTION_ID = 2;
 						const BLOCK_TEXT_ID = 3;
 						const FOOTER_ID = 4;
-						const lexerWithHash: LexerWithHash | undefined = plugin.lexers[code_block[EXTENTION_ID]];
-						if (!lexerWithHash){
+						const registered: RegisteredLexer | undefined = plugin.lexers[code_block[EXTENTION_ID]];
+						if (!registered){
 							continue;
 						}
 
-						const lexer: Lexer = lexerWithHash.lexer;
-						const lexerSettings: LexerSettings = plugin.settings.lexersSettings[lexerWithHash.hash];
+						const lexer: Lexer = registered.lexer;
+						const lexerSettings: LexerSettings = plugin.settings.lexersSettings[registered.uuid];
 						if (!lexerSettings.enabled){
 							continue;
 						}
@@ -152,7 +179,7 @@ export default class LetterAPlugin extends Plugin {
 							const token_index = relevant_part.indexOf(token.text)
 
 							for (let i = 0; i < token.text.length; i++) {
-								const colour: Colour = lexerSettings.colourMappings[token.type] ?? default_colours[0];
+								const colour: Colour = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type]) ?? default_colours[0];
 								const replaceDecoration = Decoration.replace({
 									widget: new BWidget(relevant_part[token_index + i], colour),
 								});

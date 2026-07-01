@@ -1,14 +1,14 @@
-import { default_colours } from "settings/pallet";
 import { Lexer, Token } from "../api";
 
 export const exampleLexer: Lexer = {
+    id: "core.example",
+    version: 1,
     name: "example",
-    defaultColoursMapping:
-    {
-        word: default_colours[0], 
-        // TODO:
-        // determine how to handle colours added by plugins, maybe add:
-        // addCustomColour()
+    requiredColours: [
+        { name: "Word Red", value: "#ff0000" },
+    ],
+    colourMapping: {
+        word: "Word Red",
     },
     tokenize(input: string): Token[]{
         const target = /color: \w+/gi;
