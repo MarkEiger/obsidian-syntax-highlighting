@@ -90,6 +90,9 @@ export default class LetterAPlugin extends Plugin {
 	async loadSettings() {
 		console.log("loading data")
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// on a fresh install coloursPallete IS the module-level default_colours
+		// array — clone it so palette edits can't mutate the seed/fallback
+		this.settings.coloursPallete = this.settings.coloursPallete.map(c => ({ ...c }));
 	}
 
 	async saveSettings() {

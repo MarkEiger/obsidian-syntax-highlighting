@@ -3,12 +3,12 @@ import { BaseSettingsTab } from './base_settings';
 import { Colour, newColourId } from './settings';
 
 export const default_colours: Colour[] = [
-    {id: 'global-red', name: 'Red', value:'#ff0000', isCustom: true},
-    {id: 'global-green', name: 'Green', value: '#00ff00', isCustom: true},
-    {id: 'global-blue', name: 'Blue', value: '#0000ff', isCustom: true},
-    {id: 'global-yellow', name: 'Yellow', value: '#ffff00', isCustom: true},
-    {id: 'global-cyan', name: 'Cyan', value: '#00ffff', isCustom: true},
-    {id: 'global-magenta', name: 'Magenta', value: '#ff00ff', isCustom: true}
+    {id: 'global-red', name: 'Red', value:'#ff0000', isCustom: false},
+    {id: 'global-green', name: 'Green', value: '#00ff00', isCustom: false},
+    {id: 'global-blue', name: 'Blue', value: '#0000ff', isCustom: false},
+    {id: 'global-yellow', name: 'Yellow', value: '#ffff00', isCustom: false},
+    {id: 'global-cyan', name: 'Cyan', value: '#00ffff', isCustom: false},
+    {id: 'global-magenta', name: 'Magenta', value: '#ff00ff', isCustom: false}
 ]
 export class PaletteSettingsTab extends BaseSettingsTab {
     display() {
@@ -63,30 +63,42 @@ export class PaletteSettingsTab extends BaseSettingsTab {
             colorListContainer.empty();
             plugin.settings.coloursPallete.forEach((colorValue, index) => {
                 const setting = new Setting(colorListContainer);
-                setting
-                    .addText((text) => {
+                if (colorValue.isCustom) {
+                    setting.addText((text) => {
                         text.setValue(colorValue.name).onChange(async (value) => {
                             plugin.settings.coloursPallete[index].name = value;
                             await plugin.saveSettings();
                         });
                         setting.nameEl.appendChild(text.inputEl);
-                    })
+                        // renames save per keystroke, but the rest of the pane
+                        // (token dropdowns) only syncs once editing finishes —
+                        // refreshing per keystroke would steal this input's focus
+                        const initialName = colorValue.name;
+                        text.inputEl.addEventListener('blur', () => {
+                            if (colorValue.name !== initialName) this.refresh();
+                        });
+                    });
+                } else {
+                    // default colours keep their name
+                    setting.setName(colorValue.name);
+                }
+                setting
                     .addColorPicker((color) => {
                         color.setValue(colorValue.value).onChange(async (value) => {
                             plugin.settings.coloursPallete[index].value = value;
                             await plugin.saveSettings();
+                            // sync the token rows' colour swatches
+                            this.refresh();
                         });
                     })
-                    .addExtraButton((btn) => {
+                    .setClass('tokens-colors-element');
+                // default colours have no delete button at all
+                if (colorValue.isCustom) {
+                    setting.addExtraButton((btn) => {
                         const inUse = this.colourInUse(colorValue);
                         btn.setIcon('trash')
-                            .setTooltip(!colorValue.isCustom ? 'Supplied colours cannot be deleted'
-                                : inUse ? 'In use by a token type — cannot delete' : 'Remove')
+                            .setTooltip(inUse ? 'In use by a token type — cannot delete' : 'Remove')
                             .onClick(async () => {
-                                if (!colorValue.isCustom) {
-                                    new Notice(`Cannot delete "${colorValue.name}": it is supplied by a lexer.`);
-                                    return;
-                                }
                                 // recompute: a token may have been re-coloured since render
                                 if (this.colourInUse(colorValue)) {
                                     new Notice(`Cannot delete "${colorValue.name}": it is in use by a token type.`);
@@ -96,8 +108,8 @@ export class PaletteSettingsTab extends BaseSettingsTab {
                                 await plugin.saveSettings();
                                 this.refresh();
                             });
-                    })
-                    .setClass('tokens-colors-element');
+                    });
+                }
             });
         };
 

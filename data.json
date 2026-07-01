@@ -1,64 +1,74 @@
 {
   "coloursPallete": [
     {
+      "id": "global-red",
       "name": "Red",
-      "value": "#ff0000"
+      "value": "#ff0000",
+      "isCustom": false
     },
     {
+      "id": "global-green",
       "name": "Green",
-      "value": "#00ff00"
+      "value": "#00ff00",
+      "isCustom": false
     },
     {
+      "id": "global-blue",
       "name": "Blue",
-      "value": "#0000ff"
+      "value": "#0000ff",
+      "isCustom": false
     },
     {
+      "id": "global-yellow",
       "name": "Yellow",
-      "value": "#ffff00"
+      "value": "#ffff00",
+      "isCustom": false
     },
     {
+      "id": "global-cyan",
       "name": "Cyan",
-      "value": "#00ffff"
+      "value": "#00ffff",
+      "isCustom": false
     },
     {
-      "name": "Bright Pink",
-      "value": "#ffc2ff"
-    },
-    {
+      "id": "global-magenta",
       "name": "Magenta",
-      "value": "#ff0095"
+      "value": "#ff00ff",
+      "isCustom": false
     },
     {
-      "name": "dark pink",
-      "value": "#8e6b80"
+      "id": "7fd7d6a8-2e0d-4c63-bfb2-da5a7d3eab1c",
+      "name": "Fuxia2",
+      "value": "#ff007b",
+      "isCustom": true
     },
     {
-      "id": "909afc7a-15aa-47ac-ba15-9cb8e3bc643c",
-      "name": "purple",
-      "value": "#641f89",
+      "id": "97fac0e4-3197-4fa9-8559-904ac94ecb19",
+      "name": "white2",
+      "value": "#ffffff",
       "isCustom": true
     }
   ],
   "lexersSettings": {
-    "cacfc73d-7d1b-4bca-86de-086e0cc5fead": {
+    "c9e6dd4f-8ef0-4ed4-9df0-bd394e35efb8": {
       "lexerId": "core.example",
-      "extention": "example",
+      "extention": "exampl",
       "privatePool": [
         {
-          "id": "217107fa-b9e0-4768-a68d-13a57a94fb90",
+          "id": "f25c747a-e4ce-4597-b7ed-7c5bd3aa660c",
           "name": "Word Red",
           "value": "#ff0000",
           "isCustom": false
         },
         {
-          "id": "e41bb210-6b1d-4b5c-a770-28807e74cb4e",
-          "name": "purple",
-          "value": "#641f89",
+          "id": "e3e6b27d-196b-49e8-8219-c214988c44a7",
+          "name": "Fuxia",
+          "value": "#ff007b",
           "isCustom": true
         }
       ],
       "colourMappings": {
-        "word": "217107fa-b9e0-4768-a68d-13a57a94fb90"
+        "word": "7fd7d6a8-2e0d-4c63-bfb2-da5a7d3eab1c"
       },
       "enabled": true
     }
