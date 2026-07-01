@@ -68,7 +68,23 @@
         }
       ],
       "colourMappings": {
-        "word": "7fd7d6a8-2e0d-4c63-bfb2-da5a7d3eab1c"
+        "word": "global-green"
+      },
+      "enabled": true
+    },
+    "4fa1871c-13fe-48fd-bc15-ebc280a3aad3": {
+      "lexerId": "mark.ab",
+      "extention": "ab",
+      "privatePool": [
+        {
+          "id": "9767224e-fcc7-4492-a425-19baba8ea056",
+          "name": "AB Orange",
+          "value": "#ff8800",
+          "isCustom": false
+        }
+      ],
+      "colourMappings": {
+        "ab": "global-yellow"
       },
       "enabled": true
     }

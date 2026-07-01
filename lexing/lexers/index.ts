@@ -1,11 +1,12 @@
 import { lexers } from "../api";
-import { exampleLexer } from "./example";
 
 /*
-To add a new lexer:
-  1. define it in this directory as an export (see example.ts)
+Built-in lexers register here:
+  1. define one in this directory as an export
   2. import it above
-  3. push it below
+  3. lexers.push(...) it below
 That's the only file you need to touch — main.ts stays untouched.
+
+(none currently — lexers ship via imported_lexers/*.js, see js_lexers.md)
 */
-lexers.push(exampleLexer);
+void lexers;

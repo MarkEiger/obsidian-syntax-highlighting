@@ -12,7 +12,7 @@ language.
 ## Where lexers live
 
 ```
-.obsidian/plugins/obsidian-syntax-highlighting/lexers/*.js
+.obsidian/plugins/obsidian-syntax-highlighting/imported_lexers/*.js
 ```
 
 The plugin scans this folder on load (and when you run the **Reload lexers**
@@ -144,9 +144,12 @@ changed — the user's renamed extension, enabled state, and colour choices all
 survive the update automatically. The plugin only replaced the behavior, not the
 identity.
 
-A future in-plugin updater can add a `source` / `updateUrl` field to the file,
-compare the remote `version` against the installed one, fetch, and replace —
-matching on `id` downstream exactly as above.
+In-plugin update path: an **Update lexer** button (in the lexer's settings)
+opens a file browser asking for the new `.js` file; the plugin copies it over
+the installed one (matched by `id`) and reloads. A future updater could also
+add a `source` / `updateUrl` field to the file, compare the remote `version`
+against the installed one, fetch, and replace — matching on `id` downstream
+exactly as above.
 
 ---
 
@@ -176,16 +179,46 @@ supplied colour values and all token mappings back to your declaration.
 
 ## Loading rules & constraints
 
+- **Plain JavaScript only — no API access.** A lexer file gets no `require()`
+  and no injected objects. It is pure data plus a `tokenize` function returning
+  plain `{ text, type }` objects, which the plugin parses and validates. The
+  plugin's classes and Obsidian's API are deliberately out of reach.
 - **CommonJS only.** Use `module.exports = {...}`. ESM `export default` / `import`
   syntax won't parse.
 - **One file, one (or more) lexers.** Export a single object as above. (If
   multi-lexer files are supported later, that'll be documented here.)
+- **Shape is validated at load.** Missing/malformed fields (`id`, `name`,
+  `requiredColours`, callable `tokenize`, …) → the file is rejected with a
+  notice naming the problem.
 - **Reload** with the **Reload lexers** command after editing a file — files in
   the plugin folder don't fire automatic file-change events.
 - **Failure is isolated.** A file that throws on load is skipped (with a notice);
   a `tokenize` that throws at runtime disables highlighting for that block but
   never crashes the editor. Beyond that, correctness of a lexer is the author's
   and installer's responsibility — install lexers you trust.
+- **Settings survive missing lexers.** If a file errors or is removed, its
+  stored settings (uuid, colours, mappings) are kept, invisible, and re-attach
+  by `id` when the lexer loads again.
+
+---
+
+## Type checking your lexer (optional)
+
+Interfaces don't exist at runtime, so they can't be handed to your code — but
+you can get full editor support while writing plain JS. The plugin ships a
+`lexer-api.d.ts` into the lexers folder describing the expected export
+(`Lexer`, `DeclaredColour`, `Token`). Reference it with one JSDoc line:
+
+```js
+/** @type {import('./lexer-api').Lexer} */
+module.exports = {
+  ...
+};
+```
+
+Any TypeScript-powered editor (VS Code, …) will then autocomplete the fields
+and flag shape errors as you type. Purely a dev-time aid — the runtime
+contract is enforced by the load-time validation either way.
 
 ---
 
@@ -208,6 +241,6 @@ module.exports = {
 };
 ```
 
-Drop this in `.obsidian/plugins/obsidian-syntax-highlighting/lexers/shout.js`,
+Drop this in `.obsidian/plugins/obsidian-syntax-highlighting/imported_lexers/shout.js`,
 run **Reload lexers**, and ```shout fenced blocks will highlight all-caps words
 in red.

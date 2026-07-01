@@ -1,8 +1,10 @@
-import { ColorComponent, DropdownComponent, Menu, Setting } from "obsidian";
+import { ColorComponent, DropdownComponent, Menu, Notice, Setting } from "obsidian";
 import { BaseSettingsTab } from "./base_settings";
 import { Colour, newColourId } from "./settings";
 import { ColourNameModal, PrivatePaletteModal, RestoreDefaultsModal } from "./modals";
 import { restoreLexerDefaults } from "../lexing/reconcile";
+import { evaluateLexerSource, pickJsFile } from "../lexing/loader";
+import { Lexer } from "../lexing/api";
 
 export class LexerSettingsTab extends BaseSettingsTab {
 	display() {
@@ -10,8 +12,51 @@ export class LexerSettingsTab extends BaseSettingsTab {
 		// Lexer Settings Section
 		containerEl.createEl('h2', { text: 'Lexers Settings' });
 
+		new Setting(containerEl)
+			.setName('Imported lexers')
+			.setDesc('Import a .js lexer file, or reload the imported lexers folder')
+			.addButton(btn => btn
+				.setButtonText('Import')
+				.setCta()
+				.onClick(() => {
+					pickJsFile(async (code, fileName) => {
+						let imported: Lexer;
+						try {
+							imported = evaluateLexerSource(code, fileName);
+						} catch (e) {
+							new Notice(`${e instanceof Error ? e.message : e}`);
+							return;
+						}
+						// same id from a different file would just be skipped at
+						// load — reject here with a clear message instead
+						const clash = Object.entries(plugin.lexersByUuid)
+							.find(([, l]) => l.id === imported.id);
+						if (clash) {
+							const clashPath = plugin.lexerSourcePaths[clash[0]];
+							if (!clashPath || !clashPath.endsWith(`/${fileName}`)) {
+								new Notice(`Lexer id "${imported.id}" is already installed — use its Update option instead.`);
+								return;
+							}
+						}
+						await plugin.app.vault.adapter.write(`${plugin.importedLexersDir()}/${fileName}`, code);
+						await plugin.loadLexers();
+						this.refresh();
+						new Notice(`Imported "${imported.name}" (${imported.id})`);
+					});
+				}))
+			.addButton(btn => btn
+				.setButtonText('Reload')
+				.onClick(async () => {
+					await plugin.loadLexers();
+					this.refresh();
+					new Notice('Lexers reloaded');
+				}));
+
 		for (const [uuid, lexerSettings] of Object.entries(plugin.settings.lexersSettings)){
 			const lexer = plugin.lexersByUuid[uuid];
+			// settings kept for a lexer that isn't currently loaded — invisible
+			// until its file loads again
+			if (!lexer) continue;
 			const lexerDiv = containerEl.createDiv();
 			const header = new Setting(lexerDiv)
 				.setName(lexerSettings.extention)
@@ -58,6 +103,34 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						.onClick(() => {
 							new PrivatePaletteModal(plugin, lexerSettings, () => this.refresh()).open();
 						}));
+					// imported lexers can be updated from a new .js file
+					const sourcePath = plugin.lexerSourcePaths[uuid];
+					if (sourcePath) {
+						menu.addItem(item => item
+							.setTitle('Update lexer')
+							.setIcon('upload')
+							.onClick(() => {
+								pickJsFile(async (code, fileName) => {
+									let updated: Lexer;
+									try {
+										updated = evaluateLexerSource(code, fileName);
+									} catch (e) {
+										new Notice(`${e instanceof Error ? e.message : e}`);
+										return;
+									}
+									if (updated.id !== lexer.id) {
+										new Notice(`Id mismatch: the file declares "${updated.id}" but this lexer is "${lexer.id}". To install it as a new lexer, use Import.`);
+										return;
+									}
+									// overwrite the installed source; settings re-attach
+									// by id and reconcile keeps the user's choices
+									await plugin.app.vault.adapter.write(sourcePath, code);
+									await plugin.loadLexers();
+									this.refresh();
+									new Notice(`"${lexerSettings.extention}" updated to ${updated.version !== undefined ? `v${updated.version}` : 'the new file'}`);
+								});
+							}));
+					}
 					menu.showAtMouseEvent(evt);
 				});
 			});

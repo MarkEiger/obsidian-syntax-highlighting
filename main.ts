@@ -1,4 +1,4 @@
-import { MarkdownView, Plugin } from 'obsidian';
+import { MarkdownView, Notice, Plugin } from 'obsidian';
 import { Extension, RangeSetBuilder, StateEffect } from '@codemirror/state';
 import {
 	Decoration,
@@ -13,6 +13,7 @@ import { LetterASettingTab, LexerSettings } from 'settings/settings';
 import { LetterAPluginSettings, DEFAULT_SETTINGS, Colour } from 'settings/settings';
 import { Lexer, lexers } from 'lexing/api';
 import { validateLexer, seedLexerSettings, reconcileLexerSettings } from 'lexing/reconcile';
+import { FileLexer, IMPORTED_LEXERS_DIR, LEXER_API_DTS, evaluateLexerSource } from 'lexing/loader';
 import { default_colours } from 'settings/pallet';
 import 'lexing';
 
@@ -27,6 +28,8 @@ export default class LetterAPlugin extends Plugin {
 	settings: LetterAPluginSettings = DEFAULT_SETTINGS;
 	lexers: LexersMap =  {}          // keyed by code-block extension (render path)
 	lexersByUuid: Record<string, Lexer> = {}  // keyed by settings uuid (settings path)
+	// source file of each imported lexer, keyed by settings uuid (built-ins absent)
+	lexerSourcePaths: Record<string, string> = {}
 	// transient (not persisted) — which settings sections are expanded, so a
 	// re-render of the settings pane preserves the user's open/closed sections
 	expandedSections: Set<string> = new Set();
@@ -41,17 +44,62 @@ export default class LetterAPlugin extends Plugin {
 
 		// Add the Settings Tab
 		this.addSettingTab(new LetterASettingTab(this.app, this));
+
+		this.addCommand({
+			id: 'reload-lexers',
+			name: 'Reload lexers',
+			callback: async () => {
+				await this.loadLexers();
+				new Notice('Lexers reloaded');
+			},
+		});
+	}
+
+	importedLexersDir(): string {
+		return `${this.manifest.dir}/${IMPORTED_LEXERS_DIR}`;
+	}
+
+	// scan imported_lexers/*.js; a file that fails to load is skipped with a
+	// notice and its stored settings stay untouched until it loads again
+	async scanFileLexers(): Promise<FileLexer[]> {
+		const adapter = this.app.vault.adapter;
+		const dir = this.importedLexersDir();
+		if (!(await adapter.exists(dir))) {
+			await adapter.mkdir(dir);
+		}
+		// keep the dev-time type stubs in sync with the installed plugin
+		await adapter.write(`${dir}/lexer-api.d.ts`, LEXER_API_DTS);
+
+		const fileLexers: FileLexer[] = [];
+		for (const path of (await adapter.list(dir)).files) {
+			if (!path.endsWith('.js')) continue;
+			try {
+				const code = await adapter.read(path);
+				fileLexers.push({ lexer: evaluateLexerSource(code, path), path });
+			} catch (e) {
+				console.warn('[lexer file]', e);
+				new Notice(`Failed to load lexer: ${e instanceof Error ? e.message : e}`);
+			}
+		}
+		return fileLexers;
 	}
 
 	async loadLexers(){
-		const presentLexersSettings: Record<string, LexerSettings> = {};
 		this.lexers = {};
 		this.lexersByUuid = {};
+		this.lexerSourcePaths = {};
 		const seenIds = new Set<string>();
 
-		for (const lexer of lexers){
+		const fileLexers = await this.scanFileLexers();
+		const allLexers: { lexer: Lexer, path?: string }[] = [
+			...lexers.map(lexer => ({ lexer })),
+			...fileLexers,
+		];
+
+		for (const { lexer, path } of allLexers){
 			if (seenIds.has(lexer.id)) {
-				console.warn(`[lexer ${lexer.id}] duplicate lexer id — skipping`);
+				console.warn(`[lexer ${lexer.id}] duplicate lexer id — skipping ${path ?? '(built-in)'}`);
+				new Notice(`Lexer id "${lexer.id}" is already in use — skipping ${path ?? 'a duplicate'}.`);
 				continue;
 			}
 			seenIds.add(lexer.id);
@@ -71,11 +119,15 @@ export default class LetterAPlugin extends Plugin {
 				lexerSettings = seedLexerSettings(lexer);
 			}
 
-			presentLexersSettings[uuid] = lexerSettings;
+			// settings of lexers that failed to load / were removed stay in
+			// lexersSettings untouched — they re-attach by id when back
+			this.settings.lexersSettings[uuid] = lexerSettings;
 			this.lexers[lexerSettings.extention] = {lexer: lexer, uuid: uuid};
 			this.lexersByUuid[uuid] = lexer;
+			if (path) {
+				this.lexerSourcePaths[uuid] = path;
+			}
 		}
-		this.settings.lexersSettings = presentLexersSettings;
 		await this.saveSettings();
 	}
 
@@ -175,8 +227,19 @@ export default class LetterAPlugin extends Plugin {
 						const textInsideCodeBlock = code_block[BLOCK_TEXT_ID]; // The second capture group contains the text inside the code block
 						console.log("found code block: " + textInsideCodeBlock);
 						let last_index = 0;
-						const tokens = lexer.tokenize(textInsideCodeBlock);
+						// a broken lexer must not take down the whole document
+						let tokens;
+						try {
+							tokens = lexer.tokenize(textInsideCodeBlock);
+						} catch (e) {
+							console.warn(`[lexer ${lexer.id}] tokenize threw:`, e);
+							continue;
+						}
 						for (const token of tokens) {
+							if (!token || typeof token.text !== 'string' || typeof token.type !== 'string') {
+								console.warn(`[lexer ${lexer.id}] skipping malformed token`, token);
+								continue;
+							}
 							console.log('token found ' + token.text + " token type: " + token.type)
 							const relevant_part = textInsideCodeBlock.slice(last_index)
 							const token_index = relevant_part.indexOf(token.text)
