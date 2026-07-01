@@ -208,11 +208,11 @@ var LexerSettingsTab = class extends BaseSettingsTab {
         index++;
         const isCustom = !palette.some((c) => c.value === colour.value);
         new import_obsidian2.Setting(tokensDiv).setName(`${tokenType} Color`).setClass(cssClass).addDropdown((dropdown) => {
+          dropdown.addOption("custom", "Custom Colour");
           for (const option of palette) {
             dropdown.addOption(option.value, option.name);
           }
           dropdownComp = dropdown;
-          dropdown.addOption("custom", "Custom Color");
           dropdown.setValue(isCustom ? "custom" : colour.value);
           dropdown.onChange(async (value) => {
             if (value === "custom") {
@@ -347,7 +347,7 @@ var exampleLexer = {
   defaultColoursMapping: {
     word: default_colours[0]
     // TODO:
-    // determine how to handle default colours added by plugins, maybe add:
+    // determine how to handle colours added by plugins, maybe add:
     // addCustomColour()
   },
   tokenize(input) {

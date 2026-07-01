@@ -7,7 +7,7 @@ export const exampleLexer: Lexer = {
     {
         word: default_colours[0], 
         // TODO:
-        // determine how to handle default colours added by plugins, maybe add:
+        // determine how to handle colours added by plugins, maybe add:
         // addCustomColour()
     },
     tokenize(input: string): Token[]{

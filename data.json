@@ -27,6 +27,10 @@
     {
       "name": "Magenta",
       "value": "#ff0095"
+    },
+    {
+      "name": "dark pink",
+      "value": "#8e6b80"
     }
   ],
   "lexersSettings": {
@@ -34,8 +38,8 @@
       "extention": "example",
       "colourMappings": {
         "word": {
-          "name": "Magenta",
-          "value": "#ff0095"
+          "name": "Cyan",
+          "value": "#00ffff"
         }
       },
       "enabled": true

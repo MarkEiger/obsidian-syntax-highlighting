@@ -86,11 +86,12 @@ export class LexerSettingsTab extends BaseSettingsTab {
 					.setName(`${tokenType} Color`)
 					.setClass(cssClass)
 					.addDropdown(dropdown => {
+						dropdown.addOption('custom', 'Custom Colour');
 						for (const option of palette) {
 							dropdown.addOption(option.value, option.name);
 						}
 						dropdownComp = dropdown;
-							dropdown.addOption('custom', 'Custom Color');
+
 						dropdown.setValue(isCustom ? 'custom' : colour.value);
 						dropdown.onChange(async value => {
 							if (value === 'custom') {
