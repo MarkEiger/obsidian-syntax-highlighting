@@ -87,6 +87,94 @@
         "ab": "global-yellow"
       },
       "enabled": true
+    },
+    "930c0067-6734-4346-8368-1259991d9069": {
+      "lexerId": "mark.nasm",
+      "extention": "nasm",
+      "privatePool": [
+        {
+          "id": "a2327704-815f-4f93-9925-52816315898b",
+          "name": "Mnemonic Pink",
+          "value": "#ff79c6",
+          "isCustom": false
+        },
+        {
+          "id": "7b4d2c43-2542-4082-b144-da4d008fac63",
+          "name": "Register Cyan",
+          "value": "#8be9fd",
+          "isCustom": false
+        },
+        {
+          "id": "589c0755-f540-414e-9a49-fd3cf5e91a86",
+          "name": "Number Peach",
+          "value": "#ffb86c",
+          "isCustom": false
+        },
+        {
+          "id": "2e9f7124-f7ea-4975-91b3-c1a4ea2a8adc",
+          "name": "String Sun",
+          "value": "#f1fa8c",
+          "isCustom": false
+        },
+        {
+          "id": "0a9690f9-a48e-4a47-8bac-07e058dd285d",
+          "name": "Comment Slate",
+          "value": "#6272a4",
+          "isCustom": false
+        },
+        {
+          "id": "343a45a6-d45f-4ebc-a0d8-1bf26fb63d08",
+          "name": "Directive Grape",
+          "value": "#bd93f9",
+          "isCustom": false
+        },
+        {
+          "id": "6707f86f-b1b6-4d75-8661-303f65c3c476",
+          "name": "Label Mint",
+          "value": "#50fa7b",
+          "isCustom": false
+        },
+        {
+          "id": "a0344b3a-5e8e-4850-952f-8428c3be3d39",
+          "name": "Address Sky",
+          "value": "#6fa8dc",
+          "isCustom": false
+        },
+        {
+          "id": "7b8a31d6-bfc3-40d9-b7d4-7abd73d05ede",
+          "name": "Size Lilac",
+          "value": "#d6acff",
+          "isCustom": false
+        },
+        {
+          "id": "63011d45-9e55-484c-bb00-1aa7008f1c6d",
+          "name": "Ident Fog",
+          "value": "#a9b1d6",
+          "isCustom": false
+        },
+        {
+          "id": "80ddc43d-ddab-4e7e-9fdb-8d625a25f9a6",
+          "name": "Invalid Rose",
+          "value": "#ff6e6e",
+          "isCustom": false
+        }
+      ],
+      "colourMappings": {
+        "mnemonic": "a2327704-815f-4f93-9925-52816315898b",
+        "register": "7b4d2c43-2542-4082-b144-da4d008fac63",
+        "number": "589c0755-f540-414e-9a49-fd3cf5e91a86",
+        "string": "2e9f7124-f7ea-4975-91b3-c1a4ea2a8adc",
+        "comment": "0a9690f9-a48e-4a47-8bac-07e058dd285d",
+        "directive": "343a45a6-d45f-4ebc-a0d8-1bf26fb63d08",
+        "label": "6707f86f-b1b6-4d75-8661-303f65c3c476",
+        "address": "a0344b3a-5e8e-4850-952f-8428c3be3d39",
+        "size": "7b8a31d6-bfc3-40d9-b7d4-7abd73d05ede",
+        "ident": "63011d45-9e55-484c-bb00-1aa7008f1c6d",
+        "prefix": "a2327704-815f-4f93-9925-52816315898b",
+        "bytes": "0a9690f9-a48e-4a47-8bac-07e058dd285d",
+        "invalid": "80ddc43d-ddab-4e7e-9fdb-8d625a25f9a6"
+      },
+      "enabled": true
     }
   }
 }
