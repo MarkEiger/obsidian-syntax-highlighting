@@ -1,5 +1,5 @@
 import { MarkdownView, Notice, Plugin } from 'obsidian';
-import { EditorState, Extension, Range, StateEffect } from '@codemirror/state';
+import { Extension, RangeSetBuilder, StateEffect } from '@codemirror/state';
 import {
 	Decoration,
 	DecorationSet,
@@ -18,15 +18,6 @@ import 'lexing';
 
 type RegisteredLexer = {lexer: Lexer, uuid: string};
 type LexersMap = Record<string, RegisteredLexer>;
-// a fenced code block's location: from/to include the fences,
-// contentFrom/contentTo span the text handed to the lexer
-type CodeBlock = {
-	from: number;
-	contentFrom: number;
-	contentTo: number;
-	to: number;
-	extension: string;
-};
 
 // Dispatched to every editor when settings change, so the ViewPlugin
 // re-runs buildDecorations even though the document hasn't changed.
@@ -187,162 +178,78 @@ export default class LetterAPlugin extends Plugin {
 			}
 			return mark;
 		};
-		// find every ```lang fenced block from `start` (which must not be inside
-		// a block) to the end of the document
-		const scanBlocks = (state: EditorState, start: number): CodeBlock[] => {
-			const text = state.sliceDoc(start);
-			// markdown pairing rules: ANY line-start fence opens a block —
-			// whatever its info string, including none — but only a bare ```
-			// line closes one. The lexer extension is the info string's first
-			// word; a block with no extension is tracked but never coloured.
-			const code_block_regex = new RegExp(`(^\`\`\`([^\n]*)\n)([\\s\\S]*?)(^\`\`\`[ \t]*$)`, 'gm');
-			const blocks: CodeBlock[] = [];
-			let match;
-			while ((match = code_block_regex.exec(text)) !== null) {
-				const HEADER_ID = 1;
-				const EXTENTION_ID = 2;
-				const BLOCK_TEXT_ID = 3;
-				const FOOTER_ID = 4;
-				const from = start + match.index;
-				const contentFrom = from + match[HEADER_ID].length;
-				const contentTo = contentFrom + match[BLOCK_TEXT_ID].length;
-				blocks.push({
-					from,
-					contentFrom,
-					contentTo,
-					to: contentTo + match[FOOTER_ID].length,
-					extension: match[EXTENTION_ID].trim().split(/\s+/)[0],
-				});
-			}
-			return blocks;
-		};
-
-		// tokenize one block and return its decorations (empty if no lexer is
-		// registered for the extension, it is disabled, or tokenize throws)
-		const tokenizeBlock = (state: EditorState, block: CodeBlock): Range<Decoration>[] => {
-			if (!block.extension) return [];
-			const registered: RegisteredLexer | undefined = plugin.lexers[block.extension];
-			if (!registered) return [];
-			const lexerSettings: LexerSettings = plugin.settings.lexersSettings[registered.uuid];
-			if (!lexerSettings.enabled) return [];
-			const lexer: Lexer = registered.lexer;
-			const content = state.sliceDoc(block.contentFrom, block.contentTo);
-			// a broken lexer must not take down the whole document
-			let tokens;
-			try {
-				tokens = lexer.tokenize(content);
-			} catch (e) {
-				console.warn(`[lexer ${lexer.id}] tokenize threw:`, e);
-				return [];
-			}
-			const ranges: Range<Decoration>[] = [];
-			let last_index = 0;
-			for (const token of tokens) {
-				if (!token || typeof token.text !== 'string' || typeof token.type !== 'string') {
-					console.warn(`[lexer ${lexer.id}] skipping malformed token`, token);
-					continue;
-				}
-				const token_index = content.slice(last_index).indexOf(token.text);
-				if (token_index === -1) {
-					console.warn(`[lexer ${lexer.id}] token text not found in block:`, token.text);
-					continue;
-				}
-				const matchPos = block.contentFrom + last_index + token_index;
-				const colour: Colour = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type]) ?? default_colours[0];
-				ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
-				last_index += token_index + token.text.length;
-			}
-			return ranges;
-		};
-
 		return ViewPlugin.fromClass(
 			class {
-				decorations: DecorationSet = Decoration.none;
-				blocks: CodeBlock[] = [];
+				decorations: DecorationSet;
 
 				constructor(view: EditorView) {
-					this.rebuildFrom(view.state, 0);
+					this.decorations = this.buildDecorations(view);
 				}
 
 				update(update: ViewUpdate) {
-					// settings changed: colours/mappings are global, rebuild everything
-					if (update.transactions.some(tr =>
-						tr.effects.some(e => e.is(refreshHighlight)))) {
-						this.rebuildFrom(update.state, 0);
-						return;
-					}
-					if (!update.docChanged) return;
-
-					// shift decorations and block ranges through the edit; every
-					// block the edit didn't touch is now correct without any work
-					this.decorations = this.decorations.map(update.changes);
-					this.blocks = this.blocks.map(b => ({
-						from: update.changes.mapPos(b.from, -1),
-						contentFrom: update.changes.mapPos(b.contentFrom, -1),
-						contentTo: update.changes.mapPos(b.contentTo, 1),
-						to: update.changes.mapPos(b.to, 1),
-						extension: b.extension,
-					}));
-
-					// block boundaries can only move if a fence line changed, so
-					// check the changed ranges — expanded to whole lines, both the
-					// old and the new text — for a fence marker
-					let earliest = Infinity; // earliest change, new-doc coordinates
-					let fenceInvolved = false;
-					const changed: { fromB: number; toB: number }[] = [];
-					update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
-						changed.push({ fromB, toB });
-						earliest = Math.min(earliest, fromB);
-						if (!fenceInvolved) {
-							const oldDoc = update.startState.doc;
-							const newDoc = update.state.doc;
-							const oldLines = oldDoc.sliceString(oldDoc.lineAt(fromA).from, oldDoc.lineAt(toA).to);
-							const newLines = newDoc.sliceString(newDoc.lineAt(fromB).from, newDoc.lineAt(toB).to);
-							fenceInvolved = oldLines.includes('```') || newLines.includes('```');
-						}
-					});
-
-					if (fenceInvolved) {
-						// fences pair top-down, so structure up to the last block
-						// that ends before the edit cannot change. Rescanning from
-						// that block's end (not the edit itself) also re-pairs any
-						// unclosed fence sitting in the prose gap before the edit.
-						let rescanStart = 0;
-						for (const b of this.blocks) {
-							if (b.to < earliest) rescanStart = Math.max(rescanStart, b.to);
-						}
-						this.rebuildFrom(update.state, rescanStart);
-						return;
-					}
-
-					// content-only edit: re-tokenize just the touched blocks
-					for (const block of this.blocks) {
-						if (!changed.some(r => r.fromB <= block.contentTo && r.toB >= block.contentFrom)) continue;
-						this.decorations = this.decorations.update({
-							filterFrom: block.contentFrom,
-							filterTo: block.contentTo,
-							filter: () => false,
-							add: tokenizeBlock(update.state, block),
-						});
+					if (
+						update.docChanged ||
+						update.transactions.some(tr =>
+							tr.effects.some(e => e.is(refreshHighlight)))
+					) {
+						this.decorations = this.buildDecorations(update.view);
 					}
 				}
 
-				// drop all structure and decorations from `start` onward and
-				// rebuild them by rescanning; `start` must not be inside a block
-				rebuildFrom(state: EditorState, start: number) {
-					this.blocks = this.blocks.filter(b => b.to <= start);
-					const rescanned = scanBlocks(state, start);
-					const add: Range<Decoration>[] = [];
-					for (const block of rescanned) {
-						add.push(...tokenizeBlock(state, block));
+				buildDecorations(view: EditorView): DecorationSet {
+					const builder = new RangeSetBuilder<Decoration>();
+
+					const file_text = view.state.doc.toString();
+					const code_block_regex2 = new RegExp(`(\`\`\`(\\w+)\n)([\\s\\S]*?)(\`\`\`)`, 'gmi');
+
+					let code_block;
+					while ((code_block = code_block_regex2.exec(file_text))!==null) {
+						const HEADER_ID = 1;
+						const EXTENTION_ID = 2;
+						const BLOCK_TEXT_ID = 3;
+						const FOOTER_ID = 4;
+						const registered: RegisteredLexer | undefined = plugin.lexers[code_block[EXTENTION_ID]];
+						if (!registered){
+							continue;
+						}
+
+						const lexer: Lexer = registered.lexer;
+						const lexerSettings: LexerSettings = plugin.settings.lexersSettings[registered.uuid];
+						if (!lexerSettings.enabled){
+							continue;
+						}
+
+						const start_of_code_block = code_block.index + code_block[HEADER_ID].length; // Position of the start of the text inside the code block
+						const textInsideCodeBlock = code_block[BLOCK_TEXT_ID]; // The second capture group contains the text inside the code block
+						console.log("found code block: " + textInsideCodeBlock);
+						let last_index = 0;
+						// a broken lexer must not take down the whole document
+						let tokens;
+						try {
+							tokens = lexer.tokenize(textInsideCodeBlock);
+						} catch (e) {
+							console.warn(`[lexer ${lexer.id}] tokenize threw:`, e);
+							continue;
+						}
+						for (const token of tokens) {
+							if (!token || typeof token.text !== 'string' || typeof token.type !== 'string') {
+								console.warn(`[lexer ${lexer.id}] skipping malformed token`, token);
+								continue;
+							}
+							console.log('token found ' + token.text + " token type: " + token.type)
+							const relevant_part = textInsideCodeBlock.slice(last_index)
+							const token_index = relevant_part.indexOf(token.text)
+
+							for (let i = 0; i < token.text.length; i++) {
+								const colour: Colour = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type]) ?? default_colours[0];
+								const matchPos = start_of_code_block + last_index + token_index
+								builder.add(matchPos + i, matchPos + i + 1, markFor(colour));
+							}
+							last_index += token_index + token.text.length;
+						}
 					}
-					this.blocks.push(...rescanned);
-					this.decorations = this.decorations.update({
-						filterFrom: start,
-						filterTo: state.doc.length,
-						filter: () => false,
-						add,
-					});
+
+					return builder.finish();
 				}
 			},
 			{

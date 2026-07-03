@@ -825,82 +825,153 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
   }
   buildEditorExtension() {
     const plugin = this;
+    const markCache = /* @__PURE__ */ new Map();
+    const markFor = (colour) => {
+      let mark = markCache.get(colour.value);
+      if (!mark) {
+        mark = import_view.Decoration.mark({
+          attributes: { style: `color: ${colour.value}; font-weight: bold` }
+          // todo:maybe give controll to lexer
+        });
+        markCache.set(colour.value, mark);
+      }
+      return mark;
+    };
+    const scanBlocks = (state, start) => {
+      const text = state.sliceDoc(start);
+      const code_block_regex = new RegExp(`(^\`\`\`([^
+]*)
+)([\\s\\S]*?)(^\`\`\`[ 	]*$)`, "gm");
+      const blocks = [];
+      let match;
+      while ((match = code_block_regex.exec(text)) !== null) {
+        const HEADER_ID = 1;
+        const EXTENTION_ID = 2;
+        const BLOCK_TEXT_ID = 3;
+        const FOOTER_ID = 4;
+        const from = start + match.index;
+        const contentFrom = from + match[HEADER_ID].length;
+        const contentTo = contentFrom + match[BLOCK_TEXT_ID].length;
+        blocks.push({
+          from,
+          contentFrom,
+          contentTo,
+          to: contentTo + match[FOOTER_ID].length,
+          extension: match[EXTENTION_ID].trim().split(/\s+/)[0]
+        });
+      }
+      return blocks;
+    };
+    const tokenizeBlock = (state, block) => {
+      var _a;
+      if (!block.extension)
+        return [];
+      const registered = plugin.lexers[block.extension];
+      if (!registered)
+        return [];
+      const lexerSettings = plugin.settings.lexersSettings[registered.uuid];
+      if (!lexerSettings.enabled)
+        return [];
+      const lexer = registered.lexer;
+      const content = state.sliceDoc(block.contentFrom, block.contentTo);
+      let tokens;
+      try {
+        tokens = lexer.tokenize(content);
+      } catch (e) {
+        console.warn(`[lexer ${lexer.id}] tokenize threw:`, e);
+        return [];
+      }
+      const ranges = [];
+      let last_index = 0;
+      for (const token of tokens) {
+        if (!token || typeof token.text !== "string" || typeof token.type !== "string") {
+          console.warn(`[lexer ${lexer.id}] skipping malformed token`, token);
+          continue;
+        }
+        const token_index = content.slice(last_index).indexOf(token.text);
+        if (token_index === -1) {
+          console.warn(`[lexer ${lexer.id}] token text not found in block:`, token.text);
+          continue;
+        }
+        const matchPos = block.contentFrom + last_index + token_index;
+        const colour = (_a = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type])) != null ? _a : default_colours[0];
+        ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
+        last_index += token_index + token.text.length;
+      }
+      return ranges;
+    };
     return import_view.ViewPlugin.fromClass(
       class {
         constructor(view) {
-          this.decorations = this.buildDecorations(view);
+          this.decorations = import_view.Decoration.none;
+          this.blocks = [];
+          this.rebuildFrom(view.state, 0);
         }
         update(update) {
-          if (update.docChanged || update.viewportChanged || update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshHighlight)))) {
-            this.decorations = this.buildDecorations(update.view);
+          if (update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshHighlight)))) {
+            this.rebuildFrom(update.state, 0);
+            return;
+          }
+          if (!update.docChanged)
+            return;
+          this.decorations = this.decorations.map(update.changes);
+          this.blocks = this.blocks.map((b) => ({
+            from: update.changes.mapPos(b.from, -1),
+            contentFrom: update.changes.mapPos(b.contentFrom, -1),
+            contentTo: update.changes.mapPos(b.contentTo, 1),
+            to: update.changes.mapPos(b.to, 1),
+            extension: b.extension
+          }));
+          let earliest = Infinity;
+          let fenceInvolved = false;
+          const changed = [];
+          update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+            changed.push({ fromB, toB });
+            earliest = Math.min(earliest, fromB);
+            if (!fenceInvolved) {
+              const oldDoc = update.startState.doc;
+              const newDoc = update.state.doc;
+              const oldLines = oldDoc.sliceString(oldDoc.lineAt(fromA).from, oldDoc.lineAt(toA).to);
+              const newLines = newDoc.sliceString(newDoc.lineAt(fromB).from, newDoc.lineAt(toB).to);
+              fenceInvolved = oldLines.includes("```") || newLines.includes("```");
+            }
+          });
+          if (fenceInvolved) {
+            let rescanStart = 0;
+            for (const b of this.blocks) {
+              if (b.to < earliest)
+                rescanStart = Math.max(rescanStart, b.to);
+            }
+            this.rebuildFrom(update.state, rescanStart);
+            return;
+          }
+          for (const block of this.blocks) {
+            if (!changed.some((r) => r.fromB <= block.contentTo && r.toB >= block.contentFrom))
+              continue;
+            this.decorations = this.decorations.update({
+              filterFrom: block.contentFrom,
+              filterTo: block.contentTo,
+              filter: () => false,
+              add: tokenizeBlock(update.state, block)
+            });
           }
         }
-        buildDecorations(view) {
-          var _a;
-          const builder = new import_state.RangeSetBuilder();
-          class BWidget extends import_view.WidgetType {
-            constructor(text, colour) {
-              super();
-              this.text = text;
-              this.colour = colour;
-            }
-            toDOM(view2) {
-              const span = document.createElement("span");
-              span.textContent = this.text;
-              span.style.color = this.colour.value;
-              span.style.fontWeight = "bold";
-              return span;
-            }
+        // drop all structure and decorations from `start` onward and
+        // rebuild them by rescanning; `start` must not be inside a block
+        rebuildFrom(state, start) {
+          this.blocks = this.blocks.filter((b) => b.to <= start);
+          const rescanned = scanBlocks(state, start);
+          const add = [];
+          for (const block of rescanned) {
+            add.push(...tokenizeBlock(state, block));
           }
-          const file_text = view.state.doc.toString();
-          const code_block_regex2 = new RegExp(`(\`\`\`(\\w+)
-)([\\s\\S]*?)(\`\`\`)`, "gmi");
-          let code_block;
-          while ((code_block = code_block_regex2.exec(file_text)) !== null) {
-            const HEADER_ID = 1;
-            const EXTENTION_ID = 2;
-            const BLOCK_TEXT_ID = 3;
-            const FOOTER_ID = 4;
-            const registered = plugin.lexers[code_block[EXTENTION_ID]];
-            if (!registered) {
-              continue;
-            }
-            const lexer = registered.lexer;
-            const lexerSettings = plugin.settings.lexersSettings[registered.uuid];
-            if (!lexerSettings.enabled) {
-              continue;
-            }
-            const start_of_code_block = code_block.index + code_block[HEADER_ID].length;
-            const textInsideCodeBlock = code_block[BLOCK_TEXT_ID];
-            console.log("found code block: " + textInsideCodeBlock);
-            let last_index = 0;
-            let tokens;
-            try {
-              tokens = lexer.tokenize(textInsideCodeBlock);
-            } catch (e) {
-              console.warn(`[lexer ${lexer.id}] tokenize threw:`, e);
-              continue;
-            }
-            for (const token of tokens) {
-              if (!token || typeof token.text !== "string" || typeof token.type !== "string") {
-                console.warn(`[lexer ${lexer.id}] skipping malformed token`, token);
-                continue;
-              }
-              console.log("token found " + token.text + " token type: " + token.type);
-              const relevant_part = textInsideCodeBlock.slice(last_index);
-              const token_index = relevant_part.indexOf(token.text);
-              for (let i = 0; i < token.text.length; i++) {
-                const colour = (_a = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type])) != null ? _a : default_colours[0];
-                const replaceDecoration = import_view.Decoration.replace({
-                  widget: new BWidget(relevant_part[token_index + i], colour)
-                });
-                const matchPos = start_of_code_block + last_index + token_index;
-                builder.add(matchPos + i, matchPos + i + 1, replaceDecoration);
-              }
-              last_index += token_index + token.text.length;
-            }
-          }
-          return builder.finish();
+          this.blocks.push(...rescanned);
+          this.decorations = this.decorations.update({
+            filterFrom: start,
+            filterTo: state.doc.length,
+            filter: () => false,
+            add
+          });
         }
       },
       {
