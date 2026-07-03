@@ -22,8 +22,11 @@ export interface Lexer {
 	id: string;
 	/** bump when token types / colours change */
 	version?: number;
-	/** display name and the default code-block tag (the \`\`\`name fence) */
+	/** display name shown in settings — independent of the extension */
 	name: string;
+	/** default code-block tag (the \`\`\`tag fence); falls back to name when omitted.
+	    The user can re-target it in settings. */
+	defaultExtension?: string;
 	/** every colour this lexer uses — names are frozen once shipped */
 	requiredColours: DeclaredColour[];
 	/** token type -> the name of a colour declared in requiredColours */
@@ -38,6 +41,9 @@ export function validateLexerShape(obj: any): string | null {
 	if (!obj || typeof obj !== 'object') return 'module.exports is not an object';
 	if (typeof obj.id !== 'string' || !obj.id) return 'missing string field "id"';
 	if (typeof obj.name !== 'string' || !obj.name) return 'missing string field "name"';
+	if (obj.defaultExtension !== undefined && (typeof obj.defaultExtension !== 'string' || !obj.defaultExtension)) {
+		return '"defaultExtension" must be a non-empty string';
+	}
 	if (obj.version !== undefined && typeof obj.version !== 'number') return '"version" must be a number';
 	if (!Array.isArray(obj.requiredColours)) return 'missing array field "requiredColours"';
 	for (const colour of obj.requiredColours) {

@@ -59,19 +59,46 @@ export class LexerSettingsTab extends BaseSettingsTab {
 			if (!lexer) continue;
 			const lexerDiv = containerEl.createDiv();
 			const header = new Setting(lexerDiv)
-				.setName(lexerSettings.extention)
+				.setName(lexer.name)
 				.addText(text => {
 					const container = text.inputEl.parentElement;
 					if (container) {
 						container.prepend(createSpan({ text: 'Code-Block Extension: ' }));
 					}
-					text.setValue(lexerSettings.extention).onChange(async (value) => {
-						const prev_value = lexerSettings.extention;
-						const registered = plugin.lexers[prev_value];
-						delete plugin.lexers[prev_value];
-						lexerSettings.extention = value
-						plugin.lexers[value] = registered;
+					text.setValue(lexerSettings.extention);
+					// commit on blur/Enter, not per keystroke — intermediate
+					// values would transiently clobber other registrations
+					const commit = async () => {
+						const value = text.getValue().trim();
+						const prev = lexerSettings.extention;
+						if (value === prev) return;
+						const reject = (reason: string) => {
+							new Notice(reason);
+							text.setValue(prev);
+						};
+						if (!value) return reject('Extension cannot be empty.');
+						if (/\s/.test(value)) return reject('Extension must be a single word.');
+						// check stored settings, not just loaded lexers — a
+						// clash with an unloaded lexer would resurface on load
+						const clash = Object.entries(plugin.settings.lexersSettings)
+							.find(([otherUuid, ls]) => otherUuid !== uuid && ls.extention === value);
+						if (clash) {
+							const clashLexer = plugin.lexersByUuid[clash[0]];
+							const clashName = clashLexer ? `"${clashLexer.name}"` : `id "${clash[1].lexerId}" (not loaded)`;
+							return reject(`Extension "${value}" is already targeted by ${clashName}.`);
+						}
+						// the slot may belong to another lexer if this one lost
+						// a collision at load time — only free it if it's ours
+						if (plugin.lexers[prev]?.uuid === uuid) {
+							delete plugin.lexers[prev];
+						}
+						lexerSettings.extention = value;
+						plugin.lexers[value] = { lexer, uuid };
 						await plugin.saveSettings();
+					};
+					text.inputEl.addEventListener('blur', () => { void commit(); });
+					text.inputEl.addEventListener('keydown', evt => {
+						if (evt.key === 'Enter') text.inputEl.blur();
 					});
 				})
 				.addToggle(toggle => {
@@ -91,7 +118,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						.setTitle('Restore default colours')
 						.setIcon('rotate-ccw')
 						.onClick(() => {
-							new RestoreDefaultsModal(plugin.app, lexerSettings.extention, async keepCustomColours => {
+							new RestoreDefaultsModal(plugin.app, lexer.name, async keepCustomColours => {
 								restoreLexerDefaults(lexerSettings, lexer, keepCustomColours);
 								await plugin.saveSettings();
 								this.refresh();
@@ -101,7 +128,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						.setTitle('View private palette')
 						.setIcon('palette')
 						.onClick(() => {
-							new PrivatePaletteModal(plugin, lexerSettings, () => this.refresh()).open();
+							new PrivatePaletteModal(plugin, lexerSettings, lexer.name, () => this.refresh()).open();
 						}));
 					// imported lexers can be updated from a new .js file
 					const sourcePath = plugin.lexerSourcePaths[uuid];
@@ -127,7 +154,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 									await plugin.app.vault.adapter.write(sourcePath, code);
 									await plugin.loadLexers();
 									this.refresh();
-									new Notice(`"${lexerSettings.extention}" updated to ${updated.version !== undefined ? `v${updated.version}` : 'the new file'}`);
+									new Notice(`"${lexer.name}" updated to ${updated.version !== undefined ? `v${updated.version}` : 'the new file'}`);
 								});
 							}));
 					}

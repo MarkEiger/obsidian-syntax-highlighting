@@ -250,10 +250,11 @@ var CopyCollisionModal = class extends import_obsidian2.Modal {
   }
 };
 var PrivatePaletteModal = class extends import_obsidian2.Modal {
-  constructor(plugin, lexerSettings, refresh) {
+  constructor(plugin, lexerSettings, lexerName, refresh) {
     super(plugin.app);
     this.plugin = plugin;
     this.lexerSettings = lexerSettings;
+    this.lexerName = lexerName;
     this.refresh = refresh;
   }
   onOpen() {
@@ -262,7 +263,7 @@ var PrivatePaletteModal = class extends import_obsidian2.Modal {
   render() {
     const { contentEl, lexerSettings } = this;
     contentEl.empty();
-    this.titleEl.setText(`"${lexerSettings.extention}" private palette`);
+    this.titleEl.setText(`"${this.lexerName}" private palette`);
     if (!lexerSettings.privatePool.length) {
       contentEl.createEl("p", { text: "This lexer has no private colours." });
       return;
@@ -336,6 +337,9 @@ function validateLexer(lexer) {
       warnings.push(`token type "${tokenType}" maps to undeclared colour "${colourName}"`);
     }
   }
+  if (lexer.defaultExtension !== void 0 && /\s/.test(lexer.defaultExtension)) {
+    warnings.push(`defaultExtension "${lexer.defaultExtension}" contains whitespace \u2014 code-block tags are a single word`);
+  }
   return warnings;
 }
 function defaultMappings(lexer, pool) {
@@ -349,8 +353,9 @@ function defaultMappings(lexer, pool) {
   return mappings;
 }
 function seedLexerSettings(lexer) {
+  var _a;
   const pool = lexer.requiredColours.map((c) => ({ id: newColourId(), name: c.name, value: c.value, isCustom: false }));
-  return new LexerSettings2(lexer.id, lexer.name, pool, defaultMappings(lexer, pool));
+  return new LexerSettings2(lexer.id, (_a = lexer.defaultExtension) != null ? _a : lexer.name, pool, defaultMappings(lexer, pool));
 }
 function reconcileLexerSettings(settings, lexer) {
   for (const declared of lexer.requiredColours) {
@@ -401,8 +406,11 @@ export interface Lexer {
 	id: string;
 	/** bump when token types / colours change */
 	version?: number;
-	/** display name and the default code-block tag (the \`\`\`name fence) */
+	/** display name shown in settings \u2014 independent of the extension */
 	name: string;
+	/** default code-block tag (the \`\`\`tag fence); falls back to name when omitted.
+	    The user can re-target it in settings. */
+	defaultExtension?: string;
 	/** every colour this lexer uses \u2014 names are frozen once shipped */
 	requiredColours: DeclaredColour[];
 	/** token type -> the name of a colour declared in requiredColours */
@@ -417,6 +425,9 @@ function validateLexerShape(obj) {
     return 'missing string field "id"';
   if (typeof obj.name !== "string" || !obj.name)
     return 'missing string field "name"';
+  if (obj.defaultExtension !== void 0 && (typeof obj.defaultExtension !== "string" || !obj.defaultExtension)) {
+    return '"defaultExtension" must be a non-empty string';
+  }
   if (obj.version !== void 0 && typeof obj.version !== "number")
     return '"version" must be a number';
   if (!Array.isArray(obj.requiredColours))
@@ -510,18 +521,45 @@ var LexerSettingsTab = class extends BaseSettingsTab {
       if (!lexer)
         continue;
       const lexerDiv = containerEl.createDiv();
-      const header = new import_obsidian3.Setting(lexerDiv).setName(lexerSettings.extention).addText((text) => {
+      const header = new import_obsidian3.Setting(lexerDiv).setName(lexer.name).addText((text) => {
         const container = text.inputEl.parentElement;
         if (container) {
           container.prepend(createSpan({ text: "Code-Block Extension: " }));
         }
-        text.setValue(lexerSettings.extention).onChange(async (value) => {
-          const prev_value = lexerSettings.extention;
-          const registered = plugin.lexers[prev_value];
-          delete plugin.lexers[prev_value];
+        text.setValue(lexerSettings.extention);
+        const commit = async () => {
+          var _a;
+          const value = text.getValue().trim();
+          const prev = lexerSettings.extention;
+          if (value === prev)
+            return;
+          const reject = (reason) => {
+            new import_obsidian3.Notice(reason);
+            text.setValue(prev);
+          };
+          if (!value)
+            return reject("Extension cannot be empty.");
+          if (/\s/.test(value))
+            return reject("Extension must be a single word.");
+          const clash = Object.entries(plugin.settings.lexersSettings).find(([otherUuid, ls]) => otherUuid !== uuid && ls.extention === value);
+          if (clash) {
+            const clashLexer = plugin.lexersByUuid[clash[0]];
+            const clashName = clashLexer ? `"${clashLexer.name}"` : `id "${clash[1].lexerId}" (not loaded)`;
+            return reject(`Extension "${value}" is already targeted by ${clashName}.`);
+          }
+          if (((_a = plugin.lexers[prev]) == null ? void 0 : _a.uuid) === uuid) {
+            delete plugin.lexers[prev];
+          }
           lexerSettings.extention = value;
-          plugin.lexers[value] = registered;
+          plugin.lexers[value] = { lexer, uuid };
           await plugin.saveSettings();
+        };
+        text.inputEl.addEventListener("blur", () => {
+          void commit();
+        });
+        text.inputEl.addEventListener("keydown", (evt) => {
+          if (evt.key === "Enter")
+            text.inputEl.blur();
         });
       }).addToggle((toggle) => {
         toggle.setValue(lexerSettings.enabled).onChange(async (value) => {
@@ -534,14 +572,14 @@ var LexerSettingsTab = class extends BaseSettingsTab {
         btn.extraSettingsEl.addEventListener("click", (evt) => {
           const menu = new import_obsidian3.Menu();
           menu.addItem((item) => item.setTitle("Restore default colours").setIcon("rotate-ccw").onClick(() => {
-            new RestoreDefaultsModal(plugin.app, lexerSettings.extention, async (keepCustomColours) => {
+            new RestoreDefaultsModal(plugin.app, lexer.name, async (keepCustomColours) => {
               restoreLexerDefaults(lexerSettings, lexer, keepCustomColours);
               await plugin.saveSettings();
               this.refresh();
             }).open();
           }));
           menu.addItem((item) => item.setTitle("View private palette").setIcon("palette").onClick(() => {
-            new PrivatePaletteModal(plugin, lexerSettings, () => this.refresh()).open();
+            new PrivatePaletteModal(plugin, lexerSettings, lexer.name, () => this.refresh()).open();
           }));
           const sourcePath = plugin.lexerSourcePaths[uuid];
           if (sourcePath) {
@@ -561,7 +599,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
                 await plugin.app.vault.adapter.write(sourcePath, code);
                 await plugin.loadLexers();
                 this.refresh();
-                new import_obsidian3.Notice(`"${lexerSettings.extention}" updated to ${updated.version !== void 0 ? `v${updated.version}` : "the new file"}`);
+                new import_obsidian3.Notice(`"${lexer.name}" updated to ${updated.version !== void 0 ? `v${updated.version}` : "the new file"}`);
               });
             }));
           }
@@ -718,6 +756,8 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
     // transient (not persisted) — which settings sections are expanded, so a
     // re-render of the settings pane preserves the user's open/closed sections
     this.expandedSections = /* @__PURE__ */ new Set();
+    // pending debounced settings write (null = nothing pending)
+    this.saveTimer = null;
   }
   async onload() {
     await this.loadSettings();
@@ -770,6 +810,7 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
       ...lexers.map((lexer) => ({ lexer })),
       ...fileLexers
     ];
+    const before = JSON.stringify(this.settings.lexersSettings);
     for (const { lexer, path } of allLexers) {
       if (seenIds.has(lexer.id)) {
         console.warn(`[lexer ${lexer.id}] duplicate lexer id \u2014 skipping ${path != null ? path : "(built-in)"}`);
@@ -789,13 +830,23 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
         lexerSettings = seedLexerSettings(lexer);
       }
       this.settings.lexersSettings[uuid] = lexerSettings;
-      this.lexers[lexerSettings.extention] = { lexer, uuid };
+      const occupant = this.lexers[lexerSettings.extention];
+      if (occupant) {
+        console.warn(`[lexer ${lexer.id}] extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive`);
+        new import_obsidian5.Notice(`Extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive until re-targeted in settings.`);
+      } else {
+        this.lexers[lexerSettings.extention] = { lexer, uuid };
+      }
       this.lexersByUuid[uuid] = lexer;
       if (path) {
         this.lexerSourcePaths[uuid] = path;
       }
     }
-    await this.saveSettings();
+    if (JSON.stringify(this.settings.lexersSettings) !== before) {
+      await this.saveSettings();
+    } else {
+      this.refreshEditors();
+    }
   }
   // resolve a token mapping's colour id against the global palette and the
   // owning lexer's private pool (scope is derived, not stored)
@@ -806,14 +857,29 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
     return (_a = this.settings.coloursPallete.find((c) => c.id === colourId)) != null ? _a : lexerSettings.privatePool.find((c) => c.id === colourId);
   }
   async loadSettings() {
-    console.log("loading data");
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     this.settings.coloursPallete = this.settings.coloursPallete.map((c) => ({ ...c }));
   }
+  // coalesce rapid saves (per-keystroke onChange handlers, colour-picker
+  // drags) into one disk write + editor refresh once the input pauses
   async saveSettings() {
-    console.log("Saving settings:", this.settings);
+    if (this.saveTimer !== null)
+      window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
+      void this.flushSettings();
+    }, 300);
+  }
+  async flushSettings() {
+    if (this.saveTimer !== null) {
+      window.clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
     await this.saveData(this.settings);
     this.refreshEditors();
+  }
+  onunload() {
+    if (this.saveTimer !== null)
+      void this.flushSettings();
   }
   refreshEditors() {
     this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
@@ -888,15 +954,15 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
           console.warn(`[lexer ${lexer.id}] skipping malformed token`, token);
           continue;
         }
-        const token_index = content.slice(last_index).indexOf(token.text);
+        const token_index = content.indexOf(token.text, last_index);
         if (token_index === -1) {
           console.warn(`[lexer ${lexer.id}] token text not found in block:`, token.text);
           continue;
         }
-        const matchPos = block.contentFrom + last_index + token_index;
+        const matchPos = block.contentFrom + token_index;
         const colour = (_a = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type])) != null ? _a : default_colours[0];
         ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
-        last_index += token_index + token.text.length;
+        last_index = token_index + token.text.length;
       }
       return ranges;
     };
@@ -963,9 +1029,11 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
           const rescanned = scanBlocks(state, start);
           const add = [];
           for (const block of rescanned) {
-            add.push(...tokenizeBlock(state, block));
+            for (const range of tokenizeBlock(state, block)) {
+              add.push(range);
+            }
+            this.blocks.push(block);
           }
-          this.blocks.push(...rescanned);
           this.decorations = this.decorations.update({
             filterFrom: start,
             filterTo: state.doc.length,

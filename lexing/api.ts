@@ -19,9 +19,12 @@ export interface Lexer {
 	// Must stay constant across versions — it's how a user's stored settings
 	// re-attach to this lexer after an update.
 	readonly id: string;
-	// display name and the default code-block tag (the ```name fence);
-	// the user can re-target the extension in settings
+	// display name shown in the settings UI — immutable and independent of
+	// the extension the lexer targets
 	readonly name: string;
+	// default code-block tag (the ```tag fence), seeded on first install;
+	// the user can re-target it in settings. Falls back to name when omitted.
+	readonly defaultExtension?: string;
 	// bump when the declared contract changes (token types / colours)
 	readonly version?: number;
 	// every colour this lexer uses — names are frozen once shipped, they are

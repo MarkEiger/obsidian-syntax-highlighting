@@ -1,5 +1,3 @@
-also make sure lexefrs cant target the same extention
-
 fix pwndbg lexer
 
 // set up a lexer store mechanism, the lexers themselves should be in a different branch,

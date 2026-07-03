@@ -41,6 +41,8 @@ export default class LetterAPlugin extends Plugin {
 	// transient (not persisted) — which settings sections are expanded, so a
 	// re-render of the settings pane preserves the user's open/closed sections
 	expandedSections: Set<string> = new Set();
+	// pending debounced settings write (null = nothing pending)
+	saveTimer: number | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -103,6 +105,7 @@ export default class LetterAPlugin extends Plugin {
 			...lexers.map(lexer => ({ lexer })),
 			...fileLexers,
 		];
+		const before = JSON.stringify(this.settings.lexersSettings);
 
 		for (const { lexer, path } of allLexers){
 			if (seenIds.has(lexer.id)) {
@@ -130,13 +133,30 @@ export default class LetterAPlugin extends Plugin {
 			// settings of lexers that failed to load / were removed stay in
 			// lexersSettings untouched — they re-attach by id when back
 			this.settings.lexersSettings[uuid] = lexerSettings;
-			this.lexers[lexerSettings.extention] = {lexer: lexer, uuid: uuid};
+			// two lexers targeting the same extension: the first keeps the
+			// render slot, the loser stays loaded (visible in settings) but
+			// inactive until the user re-targets one of them
+			const occupant = this.lexers[lexerSettings.extention];
+			if (occupant) {
+				console.warn(`[lexer ${lexer.id}] extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" — "${lexer.name}" is inactive`);
+				new Notice(`Extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" — "${lexer.name}" is inactive until re-targeted in settings.`);
+			} else {
+				this.lexers[lexerSettings.extention] = {lexer: lexer, uuid: uuid};
+			}
 			this.lexersByUuid[uuid] = lexer;
 			if (path) {
 				this.lexerSourcePaths[uuid] = path;
 			}
 		}
-		await this.saveSettings();
+		// persist only when reconciliation actually changed something; a
+		// clean startup shouldn't write settings at all. The save's flush
+		// repaints the editors, so only repaint directly when not saving —
+		// a reloaded lexer file can tokenize the same settings differently
+		if (JSON.stringify(this.settings.lexersSettings) !== before) {
+			await this.saveSettings();
+		} else {
+			this.refreshEditors();
+		}
 	}
 
 	// resolve a token mapping's colour id against the global palette and the
@@ -148,18 +168,31 @@ export default class LetterAPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		console.log("loading data")
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 		// on a fresh install coloursPallete IS the module-level default_colours
 		// array — clone it so palette edits can't mutate the seed/fallback
 		this.settings.coloursPallete = this.settings.coloursPallete.map(c => ({ ...c }));
 	}
 
+	// coalesce rapid saves (per-keystroke onChange handlers, colour-picker
+	// drags) into one disk write + editor refresh once the input pauses
 	async saveSettings() {
-		console.log("Saving settings:", this.settings);
+		if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+		this.saveTimer = window.setTimeout((): void => { void this.flushSettings(); }, 300);
+	}
+
+	async flushSettings() {
+		if (this.saveTimer !== null) {
+			window.clearTimeout(this.saveTimer);
+			this.saveTimer = null;
+		}
 		await this.saveData(this.settings);
-		// Force a refresh of the editors to apply the new settings immediately
 		this.refreshEditors();
+	}
+
+	onunload() {
+		// a pending debounced save must not be lost on quit/disable
+		if (this.saveTimer !== null) void this.flushSettings();
 	}
 
 	refreshEditors() {
@@ -175,7 +208,7 @@ export default class LetterAPlugin extends Plugin {
 		const plugin = this;
 		// one shared Decoration.mark per colour value: identical instances make
 		// CM's "did this decoration change?" check trivial across rebuilds, and
-		// the per-character loop below allocates nothing
+		// tokenizeBlock allocates no decoration objects, only ranges
 		const markCache = new Map<string, Decoration>();
 		const markFor = (colour: Colour): Decoration => {
 			let mark = markCache.get(colour.value);
@@ -242,15 +275,15 @@ export default class LetterAPlugin extends Plugin {
 					console.warn(`[lexer ${lexer.id}] skipping malformed token`, token);
 					continue;
 				}
-				const token_index = content.slice(last_index).indexOf(token.text);
+				const token_index = content.indexOf(token.text, last_index);
 				if (token_index === -1) {
 					console.warn(`[lexer ${lexer.id}] token text not found in block:`, token.text);
 					continue;
 				}
-				const matchPos = block.contentFrom + last_index + token_index;
+				const matchPos = block.contentFrom + token_index;
 				const colour: Colour = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type]) ?? default_colours[0];
 				ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
-				last_index += token_index + token.text.length;
+				last_index = token_index + token.text.length;
 			}
 			return ranges;
 		};
@@ -333,10 +366,14 @@ export default class LetterAPlugin extends Plugin {
 					this.blocks = this.blocks.filter(b => b.to <= start);
 					const rescanned = scanBlocks(state, start);
 					const add: Range<Decoration>[] = [];
+					// no spread pushes here: spreading passes every element as a
+					// call argument and overflows the stack past ~65k tokens
 					for (const block of rescanned) {
-						add.push(...tokenizeBlock(state, block));
+						for (const range of tokenizeBlock(state, block)) {
+							add.push(range);
+						}
+						this.blocks.push(block);
 					}
-					this.blocks.push(...rescanned);
 					this.decorations = this.decorations.update({
 						filterFrom: start,
 						filterTo: state.doc.length,

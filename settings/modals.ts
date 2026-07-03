@@ -120,7 +120,7 @@ class CopyCollisionModal extends Modal {
 // delete unused customs. Supplied colours (isCustom false) can't be deleted
 // and their names are frozen.
 export class PrivatePaletteModal extends Modal {
-	constructor(private plugin: LetterAPlugin, private lexerSettings: LexerSettings, private refresh: () => void) {
+	constructor(private plugin: LetterAPlugin, private lexerSettings: LexerSettings, private lexerName: string, private refresh: () => void) {
 		super(plugin.app);
 	}
 	onOpen() {
@@ -129,7 +129,7 @@ export class PrivatePaletteModal extends Modal {
 	private render() {
 		const { contentEl, lexerSettings } = this;
 		contentEl.empty();
-		this.titleEl.setText(`"${lexerSettings.extention}" private palette`);
+		this.titleEl.setText(`"${this.lexerName}" private palette`);
 
 		if (!lexerSettings.privatePool.length) {
 			contentEl.createEl('p', { text: 'This lexer has no private colours.' });

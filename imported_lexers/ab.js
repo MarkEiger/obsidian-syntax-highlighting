@@ -4,8 +4,10 @@ module.exports = {
   id: 'mark.ab',
   version: 1,
 
-  // display name and the default code-block tag: ```ab fences
+  // display name shown in settings — independent of the extension
   name: 'ab',
+  // default code-block tag: ```ab fences (user can re-target in settings)
+  defaultExtension: 'ab',
 
   // every colour this lexer uses -> its private pool
   requiredColours: [

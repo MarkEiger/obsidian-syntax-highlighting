@@ -269,6 +269,7 @@ module.exports = {
   id: 'mark.nasm',
   version: 3,
   name: 'nasm',
+  defaultExtension: 'nasm',
 
   // a cute dracula-ish palette
   requiredColours: [

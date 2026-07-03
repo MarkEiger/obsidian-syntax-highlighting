@@ -12,8 +12,11 @@ export interface Lexer {
 	id: string;
 	/** bump when token types / colours change */
 	version?: number;
-	/** display name and the default code-block tag (the ```name fence) */
+	/** display name shown in settings — independent of the extension */
 	name: string;
+	/** default code-block tag (the ```tag fence); falls back to name when omitted.
+	    The user can re-target it in settings. */
+	defaultExtension?: string;
 	/** every colour this lexer uses — names are frozen once shipped */
 	requiredColours: DeclaredColour[];
 	/** token type -> the name of a colour declared in requiredColours */

@@ -20,6 +20,11 @@ export function validateLexer(lexer: Lexer): string[] {
 			warnings.push(`token type "${tokenType}" maps to undeclared colour "${colourName}"`);
 		}
 	}
+	// a block's extension is the info string's first word, so an extension
+	// containing whitespace can never match a code block
+	if (lexer.defaultExtension !== undefined && /\s/.test(lexer.defaultExtension)) {
+		warnings.push(`defaultExtension "${lexer.defaultExtension}" contains whitespace — code-block tags are a single word`);
+	}
 	return warnings;
 }
 
@@ -40,7 +45,7 @@ function defaultMappings(lexer: Lexer, pool: Colour[]): ColourMapping {
 export function seedLexerSettings(lexer: Lexer): LexerSettings {
 	const pool: Colour[] = lexer.requiredColours.map(c =>
 		({ id: newColourId(), name: c.name, value: c.value, isCustom: false }));
-	return new LexerSettings(lexer.id, lexer.name, pool, defaultMappings(lexer, pool));
+	return new LexerSettings(lexer.id, lexer.defaultExtension ?? lexer.name, pool, defaultMappings(lexer, pool));
 }
 
 // Re-attach stored settings to a (possibly updated) lexer. Supplied colours
