@@ -28,12 +28,12 @@ __export(main_exports, {
   refreshHighlight: () => refreshHighlight
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
 
 // settings/settings.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // settings/pallet.ts
 var import_obsidian = require("obsidian");
@@ -155,7 +155,7 @@ var PaletteSettingsTab = class extends BaseSettingsTab {
 };
 
 // settings/lexers.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // settings/modals.ts
 var import_obsidian2 = require("obsidian");
@@ -322,19 +322,19 @@ var PrivatePaletteModal = class extends import_obsidian2.Modal {
 };
 
 // lexing/reconcile.ts
-function validateLexer(lexer) {
+function validateLexer(lexer, palette) {
   const warnings = [];
   const seen = /* @__PURE__ */ new Set();
-  for (const colour of lexer.requiredColours) {
+  for (const colour of palette) {
     const key = colour.name.toLowerCase();
     if (seen.has(key)) {
-      warnings.push(`duplicate required colour name "${colour.name}"`);
+      warnings.push(`duplicate palette colour name "${colour.name}"`);
     }
     seen.add(key);
   }
   for (const [tokenType, colourName] of Object.entries(lexer.colourMapping)) {
-    if (!lexer.requiredColours.some((c) => c.name === colourName)) {
-      warnings.push(`token type "${tokenType}" maps to undeclared colour "${colourName}"`);
+    if (!palette.some((c) => c.name === colourName)) {
+      warnings.push(`token type "${tokenType}" maps to colour "${colourName}" not in the palette`);
     }
   }
   if (lexer.defaultExtension !== void 0 && /\s/.test(lexer.defaultExtension)) {
@@ -346,74 +346,83 @@ function defaultMappings(lexer, pool) {
   const mappings = {};
   for (const [tokenType, colourName] of Object.entries(lexer.colourMapping)) {
     const colour = pool.find((c) => !c.isCustom && c.name === colourName);
-    if (colour) {
-      mappings[tokenType] = colour.id;
-    }
+    mappings[tokenType] = colour ? colour.id : "";
   }
   return mappings;
 }
-function seedLexerSettings(lexer) {
+function seedLexerSettings(lexer, palette) {
   var _a;
-  const pool = lexer.requiredColours.map((c) => ({ id: newColourId(), name: c.name, value: c.value, isCustom: false }));
+  const pool = palette.map((c) => ({ id: newColourId(), name: c.name, value: c.value, isCustom: false }));
   return new LexerSettings2(lexer.id, (_a = lexer.defaultExtension) != null ? _a : lexer.name, pool, defaultMappings(lexer, pool));
 }
-function reconcileLexerSettings(settings, lexer) {
-  for (const declared of lexer.requiredColours) {
+function reconcileLexerSettings(settings, lexer, palette) {
+  for (const declared of palette) {
     if (!settings.privatePool.some((c) => !c.isCustom && c.name === declared.name)) {
       settings.privatePool.push({ id: newColourId(), name: declared.name, value: declared.value, isCustom: false });
     }
   }
   const referenced = new Set(Object.values(settings.colourMappings));
-  settings.privatePool = settings.privatePool.filter((c) => c.isCustom || lexer.requiredColours.some((d) => d.name === c.name) || referenced.has(c.id));
+  settings.privatePool = settings.privatePool.filter((c) => c.isCustom || palette.some((d) => d.name === c.name) || referenced.has(c.id));
   const defaults = defaultMappings(lexer, settings.privatePool);
   for (const [tokenType, colourId] of Object.entries(defaults)) {
-    if (!(tokenType in settings.colourMappings)) {
+    if (!settings.colourMappings[tokenType]) {
       settings.colourMappings[tokenType] = colourId;
     }
   }
 }
-function restoreLexerDefaults(settings, lexer, keepCustomColours) {
+function restoreLexerDefaults(settings, lexer, palette, keepCustomColours) {
   for (const colour of settings.privatePool) {
     if (colour.isCustom)
       continue;
-    const declared = lexer.requiredColours.find((d) => d.name === colour.name);
+    const declared = palette.find((d) => d.name === colour.name);
     if (declared) {
       colour.value = declared.value;
     }
   }
-  for (const declared of lexer.requiredColours) {
+  for (const declared of palette) {
     if (!settings.privatePool.some((c) => !c.isCustom && c.name === declared.name)) {
       settings.privatePool.push({ id: newColourId(), name: declared.name, value: declared.value, isCustom: false });
     }
   }
-  settings.privatePool = settings.privatePool.filter((c) => c.isCustom ? keepCustomColours : lexer.requiredColours.some((d) => d.name === c.name));
+  settings.privatePool = settings.privatePool.filter((c) => c.isCustom ? keepCustomColours : palette.some((d) => d.name === c.name));
   settings.colourMappings = defaultMappings(lexer, settings.privatePool);
 }
 
 // lexing/loader.ts
 var IMPORTED_LEXERS_DIR = "imported_lexers";
+var LEXER_ENTRY = "index.js";
+function paletteFilePath(lexerFolder) {
+  return `${lexerFolder}/palette.json`;
+}
 var LEXER_API_DTS = `// generated by the syntax-highlighting plugin \u2014 describes what a lexer
-// file must export. Reference it from your lexer with:
-//   /** @type {import('./lexer-api').Lexer} */
+// must export. A lexer is a FOLDER in imported_lexers/ containing:
+//   index.js       \u2014 the entry module; its exports are the Lexer
+//   palette.json   \u2014 a PaletteColour[] array; colourMapping names resolve against it
+//   *.js           \u2014 any other modules, loadable from index.js (and each other)
+//                    via require('./relative/path') \u2014 relative paths only,
+//                    nothing outside the lexer's folder, no node built-ins
+//
+// Reference this stub from your entry module for autocomplete:
+//   /** @type {import('../lexer-api').Lexer} */
 //   module.exports = { ... };
 
 export type Token = { text: string; type: string };
 
-export type DeclaredColour = { name: string; value: string };
+/** one entry of the <yourlexer>.palette.json sidecar \u2014 names are frozen
+    once shipped, they are the reconciliation key across updates */
+export type PaletteColour = { name: string; value: string };
 
 export interface Lexer {
 	/** stable namespaced identity, e.g. 'alfred.nasm' \u2014 never change between versions */
 	id: string;
-	/** bump when token types / colours change */
+	/** bump when token types / palette change */
 	version?: number;
 	/** display name shown in settings \u2014 independent of the extension */
 	name: string;
 	/** default code-block tag (the \`\`\`tag fence); falls back to name when omitted.
 	    The user can re-target it in settings. */
 	defaultExtension?: string;
-	/** every colour this lexer uses \u2014 names are frozen once shipped */
-	requiredColours: DeclaredColour[];
-	/** token type -> the name of a colour declared in requiredColours */
+	/** token type -> the name of a colour in the palette sidecar */
 	colourMapping: Record<string, string>;
 	tokenize(input: string): Token[];
 }
@@ -430,13 +439,6 @@ function validateLexerShape(obj) {
   }
   if (obj.version !== void 0 && typeof obj.version !== "number")
     return '"version" must be a number';
-  if (!Array.isArray(obj.requiredColours))
-    return 'missing array field "requiredColours"';
-  for (const colour of obj.requiredColours) {
-    if (!colour || typeof colour.name !== "string" || typeof colour.value !== "string") {
-      return "requiredColours entries must be { name: string, value: string }";
-    }
-  }
   if (!obj.colourMapping || typeof obj.colourMapping !== "object" || Array.isArray(obj.colourMapping)) {
     return 'missing object field "colourMapping"';
   }
@@ -449,79 +451,252 @@ function validateLexerShape(obj) {
     return 'missing function "tokenize"';
   return null;
 }
-function evaluateLexerSource(code, sourceName) {
-  var _a, _b;
-  const module2 = { exports: {} };
-  let factory;
-  try {
-    factory = new Function("module", "exports", code);
-  } catch (e) {
-    throw new Error(`${sourceName}: syntax error \u2014 ${e instanceof Error ? e.message : e}`);
+function validatePaletteShape(obj) {
+  if (!Array.isArray(obj))
+    return 'palette must be a JSON array of { name, value } entries (or a shop palette with a "colours" array)';
+  for (const colour of obj) {
+    if (!colour || typeof colour.name !== "string" || !colour.name || typeof colour.value !== "string") {
+      return "palette entries must be { name: string, value: string }";
+    }
   }
+  return null;
+}
+function parsePaletteSource(text, sourceName) {
+  let parsed;
   try {
-    factory(module2, module2.exports);
+    parsed = JSON.parse(text);
   } catch (e) {
-    throw new Error(`${sourceName}: threw while loading \u2014 ${e instanceof Error ? e.message : e}`);
+    throw new Error(`${sourceName}: not valid JSON \u2014 ${e instanceof Error ? e.message : e}`);
   }
-  const lexer = (_b = (_a = module2.exports) == null ? void 0 : _a.default) != null ? _b : module2.exports;
-  const problem = validateLexerShape(lexer);
+  const colours = Array.isArray(parsed) ? parsed : parsed == null ? void 0 : parsed.colours;
+  const problem = validatePaletteShape(colours);
   if (problem) {
     throw new Error(`${sourceName}: ${problem}`);
   }
+  return colours;
+}
+var LexerLoadError = class extends Error {
+};
+function evaluateLexerModules(files, entry, sourceName) {
+  var _a;
+  const cache = {};
+  const resolve = (from, spec) => {
+    if (!spec.startsWith("./") && !spec.startsWith("../")) {
+      throw new LexerLoadError(`${sourceName}/${from}: only relative requires are allowed \u2014 got "${spec}"`);
+    }
+    const parts = from.split("/").slice(0, -1);
+    for (const seg of spec.split("/")) {
+      if (seg === "" || seg === ".")
+        continue;
+      if (seg === "..") {
+        if (!parts.length)
+          throw new LexerLoadError(`${sourceName}/${from}: require("${spec}") escapes the lexer folder`);
+        parts.pop();
+      } else {
+        parts.push(seg);
+      }
+    }
+    let path = parts.join("/");
+    if (!path.endsWith(".js"))
+      path += ".js";
+    if (!(path in files)) {
+      throw new LexerLoadError(`${sourceName}/${from}: require("${spec}") \u2014 no module "${path}" in the lexer folder`);
+    }
+    return path;
+  };
+  const load = (path) => {
+    if (cache[path])
+      return cache[path].exports;
+    const module2 = { exports: {} };
+    cache[path] = module2;
+    let factory;
+    try {
+      factory = new Function("module", "exports", "require", files[path]);
+    } catch (e) {
+      throw new LexerLoadError(`${sourceName}/${path}: syntax error \u2014 ${e instanceof Error ? e.message : e}`);
+    }
+    try {
+      factory(module2, module2.exports, (spec) => load(resolve(path, spec)));
+    } catch (e) {
+      if (e instanceof LexerLoadError)
+        throw e;
+      throw new LexerLoadError(`${sourceName}/${path}: threw while loading \u2014 ${e instanceof Error ? e.message : e}`);
+    }
+    return module2.exports;
+  };
+  const exports = load(entry);
+  const lexer = (_a = exports == null ? void 0 : exports.default) != null ? _a : exports;
+  const problem = validateLexerShape(lexer);
+  if (problem) {
+    throw new LexerLoadError(`${sourceName}: ${problem}`);
+  }
   return lexer;
 }
-function pickJsFile(onPick) {
+function pickLexerFolder(onPick) {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = ".js";
+  input.webkitdirectory = true;
   input.onchange = async () => {
     var _a;
-    const file = (_a = input.files) == null ? void 0 : _a[0];
-    if (!file)
+    const files = Array.from((_a = input.files) != null ? _a : []);
+    if (!files.length)
       return;
-    onPick(await file.text(), file.name);
+    onPick(await Promise.all(files.map(async (f) => ({
+      // webkitRelativePath is '<picked-folder>/<path-in-folder>'
+      path: f.webkitRelativePath.split("/").slice(1).join("/"),
+      content: await f.text()
+    }))));
   };
   input.click();
 }
 
+// lexing/shop.ts
+var import_obsidian3 = require("obsidian");
+var RemoteShopSource = class {
+  constructor(baseUrl) {
+    this.baseUrl = baseUrl;
+  }
+  async readText(path) {
+    const url = `${this.baseUrl.replace(/\/+$/, "")}/${path}`;
+    return (await (0, import_obsidian3.requestUrl)({ url })).text;
+  }
+  describe() {
+    return this.baseUrl;
+  }
+};
+var VaultShopSource = class {
+  constructor(adapter, root) {
+    this.adapter = adapter;
+    this.root = root;
+  }
+  async readText(path) {
+    return this.adapter.read(`${this.root.replace(/\/+$/, "")}/${path}`);
+  }
+  describe() {
+    return this.root;
+  }
+};
+function shopSourceFor(shopUrl, adapter) {
+  const trimmed = shopUrl.trim();
+  return /^https?:\/\//i.test(trimmed) ? new RemoteShopSource(trimmed) : new VaultShopSource(adapter, trimmed);
+}
+async function fetchShopPalette(source, paletteId) {
+  if (!/^[\w.-]+$/.test(paletteId)) {
+    throw new Error(`invalid palette id "${paletteId}"`);
+  }
+  const path = `palettes/${paletteId}.json`;
+  let text;
+  try {
+    text = await source.readText(path);
+  } catch (e) {
+    throw new Error(`couldn't fetch "${path}" from the shop (${source.describe()}) \u2014 ${e instanceof Error ? e.message : e}`);
+  }
+  return parsePaletteSource(text, path);
+}
+
 // settings/lexers.ts
+function splitLexerPick(files) {
+  var _a;
+  const jsFiles = files.filter((f) => f.path.endsWith(".js"));
+  if (!jsFiles.length) {
+    new import_obsidian4.Notice("The selected folder contains no .js lexer modules.");
+    return null;
+  }
+  const modules = {};
+  if (jsFiles.length === 1) {
+    modules[LEXER_ENTRY] = jsFiles[0].content;
+  } else {
+    if (!jsFiles.some((f) => f.path === LEXER_ENTRY)) {
+      new import_obsidian4.Notice(`A multi-file lexer needs ${LEXER_ENTRY} at the folder root as its entry.`);
+      return null;
+    }
+    for (const f of jsFiles)
+      modules[f.path] = f.content;
+  }
+  const rootJsons = files.filter((f) => f.path.endsWith(".json") && !f.path.includes("/"));
+  const palette = (_a = rootJsons.find((f) => f.path === "palette.json")) != null ? _a : rootJsons.find((f) => f.path.endsWith(".palette.json"));
+  const meta = rootJsons.find((f) => f.path === "meta.json");
+  return { modules, palette, meta };
+}
+async function resolvePickPalette(plugin, pick) {
+  if (pick.palette)
+    return pick.palette.content;
+  if (!pick.meta)
+    return void 0;
+  let paletteId;
+  try {
+    paletteId = JSON.parse(pick.meta.content).defaultPalette;
+  } catch (e) {
+    new import_obsidian4.Notice("meta.json is not valid JSON \u2014 importing without a palette.");
+    return void 0;
+  }
+  if (typeof paletteId !== "string" || !paletteId)
+    return void 0;
+  try {
+    const colours = await fetchShopPalette(shopSourceFor(plugin.settings.shopUrl, plugin.app.vault.adapter), paletteId);
+    return JSON.stringify(colours, null, 2);
+  } catch (e) {
+    new import_obsidian4.Notice(`Palette "${paletteId}": ${e instanceof Error ? e.message : e} \u2014 importing without colours.`);
+    return void 0;
+  }
+}
 var LexerSettingsTab = class extends BaseSettingsTab {
   display() {
     const { containerEl, plugin } = this;
     containerEl.createEl("h2", { text: "Lexers Settings" });
-    new import_obsidian3.Setting(containerEl).setName("Imported lexers").setDesc("Import a .js lexer file, or reload the imported lexers folder").addButton((btn) => btn.setButtonText("Import").setCta().onClick(() => {
-      pickJsFile(async (code, fileName) => {
+    new import_obsidian4.Setting(containerEl).setName("Lexer shop URL").setDesc("Where lexers and palettes are fetched from: an https:// URL (the remote shop), or a vault-relative folder for a local shop checkout. Clearing the field resets it.").addText((text) => text.setValue(plugin.settings.shopUrl).onChange(async (value) => {
+      plugin.settings.shopUrl = value.trim() || DEFAULT_SHOP_URL;
+      await plugin.saveSettings();
+    }));
+    new import_obsidian4.Setting(containerEl).setName("Imported lexers").setDesc("Import a lexer folder (its modules and palette.json), or reload the imported lexers folder").addButton((btn) => btn.setButtonText("Import").setCta().onClick(() => {
+      pickLexerFolder(async (files) => {
+        const pick = splitLexerPick(files);
+        if (!pick)
+          return;
         let imported;
         try {
-          imported = evaluateLexerSource(code, fileName);
+          imported = evaluateLexerModules(pick.modules, LEXER_ENTRY, "imported lexer");
+          if (pick.palette)
+            parsePaletteSource(pick.palette.content, pick.palette.path);
         } catch (e) {
-          new import_obsidian3.Notice(`${e instanceof Error ? e.message : e}`);
+          new import_obsidian4.Notice(`${e instanceof Error ? e.message : e}`);
           return;
         }
-        const clash = Object.entries(plugin.lexersByUuid).find(([, l]) => l.id === imported.id);
+        const clash = Object.values(plugin.lexersByUuid).some((l) => l.id === imported.id);
         if (clash) {
-          const clashPath = plugin.lexerSourcePaths[clash[0]];
-          if (!clashPath || !clashPath.endsWith(`/${fileName}`)) {
-            new import_obsidian3.Notice(`Lexer id "${imported.id}" is already installed \u2014 use its Update option instead.`);
-            return;
-          }
+          new import_obsidian4.Notice(`Lexer id "${imported.id}" is already installed \u2014 use its Update option instead.`);
+          return;
         }
-        await plugin.app.vault.adapter.write(`${plugin.importedLexersDir()}/${fileName}`, code);
+        const paletteContent = await resolvePickPalette(plugin, pick);
+        const folder = `${plugin.importedLexersDir()}/${imported.id.replace(/[^\w.-]/g, "_")}`;
+        const adapter = plugin.app.vault.adapter;
+        if (!await adapter.exists(folder)) {
+          await adapter.mkdir(folder);
+        }
+        for (const [name, content] of Object.entries(pick.modules)) {
+          await adapter.write(`${folder}/${name}`, content);
+        }
+        if (paletteContent) {
+          await adapter.write(paletteFilePath(folder), paletteContent);
+        }
+        if (pick.meta) {
+          await adapter.write(`${folder}/meta.json`, pick.meta.content);
+        }
         await plugin.loadLexers();
         this.refresh();
-        new import_obsidian3.Notice(`Imported "${imported.name}" (${imported.id})`);
+        new import_obsidian4.Notice(`Imported "${imported.name}" (${imported.id})`);
       });
     })).addButton((btn) => btn.setButtonText("Reload").onClick(async () => {
       await plugin.loadLexers();
       this.refresh();
-      new import_obsidian3.Notice("Lexers reloaded");
+      new import_obsidian4.Notice("Lexers reloaded");
     }));
     for (const [uuid, lexerSettings] of Object.entries(plugin.settings.lexersSettings)) {
       const lexer = plugin.lexersByUuid[uuid];
       if (!lexer)
         continue;
       const lexerDiv = containerEl.createDiv();
-      const header = new import_obsidian3.Setting(lexerDiv).setName(lexer.name).addText((text) => {
+      const header = new import_obsidian4.Setting(lexerDiv).setName(lexer.name).addText((text) => {
         const container = text.inputEl.parentElement;
         if (container) {
           container.prepend(createSpan({ text: "Code-Block Extension: " }));
@@ -534,7 +709,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           if (value === prev)
             return;
           const reject = (reason) => {
-            new import_obsidian3.Notice(reason);
+            new import_obsidian4.Notice(reason);
             text.setValue(prev);
           };
           if (!value)
@@ -570,10 +745,11 @@ var LexerSettingsTab = class extends BaseSettingsTab {
       header.addExtraButton((btn) => {
         btn.setIcon("more-vertical").setTooltip("More options");
         btn.extraSettingsEl.addEventListener("click", (evt) => {
-          const menu = new import_obsidian3.Menu();
+          const menu = new import_obsidian4.Menu();
           menu.addItem((item) => item.setTitle("Restore default colours").setIcon("rotate-ccw").onClick(() => {
             new RestoreDefaultsModal(plugin.app, lexer.name, async (keepCustomColours) => {
-              restoreLexerDefaults(lexerSettings, lexer, keepCustomColours);
+              var _a;
+              restoreLexerDefaults(lexerSettings, lexer, (_a = plugin.lexerPalettes[uuid]) != null ? _a : [], keepCustomColours);
               await plugin.saveSettings();
               this.refresh();
             }).open();
@@ -584,22 +760,41 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           const sourcePath = plugin.lexerSourcePaths[uuid];
           if (sourcePath) {
             menu.addItem((item) => item.setTitle("Update lexer").setIcon("upload").onClick(() => {
-              pickJsFile(async (code, fileName) => {
+              pickLexerFolder(async (files) => {
+                const pick = splitLexerPick(files);
+                if (!pick)
+                  return;
                 let updated;
                 try {
-                  updated = evaluateLexerSource(code, fileName);
+                  updated = evaluateLexerModules(pick.modules, LEXER_ENTRY, "updated lexer");
+                  if (pick.palette)
+                    parsePaletteSource(pick.palette.content, pick.palette.path);
                 } catch (e) {
-                  new import_obsidian3.Notice(`${e instanceof Error ? e.message : e}`);
+                  new import_obsidian4.Notice(`${e instanceof Error ? e.message : e}`);
                   return;
                 }
                 if (updated.id !== lexer.id) {
-                  new import_obsidian3.Notice(`Id mismatch: the file declares "${updated.id}" but this lexer is "${lexer.id}". To install it as a new lexer, use Import.`);
+                  new import_obsidian4.Notice(`Id mismatch: the file declares "${updated.id}" but this lexer is "${lexer.id}". To install it as a new lexer, use Import.`);
                   return;
                 }
-                await plugin.app.vault.adapter.write(sourcePath, code);
+                const paletteContent = await resolvePickPalette(plugin, pick);
+                const adapter = plugin.app.vault.adapter;
+                for (const f of (await adapter.list(sourcePath)).files) {
+                  if (f.endsWith(".js"))
+                    await adapter.remove(f);
+                }
+                for (const [name, content] of Object.entries(pick.modules)) {
+                  await adapter.write(`${sourcePath}/${name}`, content);
+                }
+                if (paletteContent) {
+                  await adapter.write(paletteFilePath(sourcePath), paletteContent);
+                }
+                if (pick.meta) {
+                  await adapter.write(`${sourcePath}/meta.json`, pick.meta.content);
+                }
                 await plugin.loadLexers();
                 this.refresh();
-                new import_obsidian3.Notice(`"${lexer.name}" updated to ${updated.version !== void 0 ? `v${updated.version}` : "the new file"}`);
+                new import_obsidian4.Notice(`"${lexer.name}" updated to ${updated.version !== void 0 ? `v${updated.version}` : "the new file"}`);
               });
             }));
           }
@@ -644,8 +839,9 @@ var LexerSettingsTab = class extends BaseSettingsTab {
         let programmatic = false;
         const cssClass = index === entries.length - 1 ? "tokens-colors-footer" : "tokens-colors-element";
         const current = resolve(mappedId);
-        new import_obsidian3.Setting(tokensDiv).setName(`${tokenType} Color`).setClass(cssClass).addDropdown((dropdown) => {
+        new import_obsidian4.Setting(tokensDiv).setName(`${tokenType} Color`).setClass(cssClass).addDropdown((dropdown) => {
           dropdownComp = dropdown;
+          dropdown.addOption("default", "Default (no colour)");
           dropdown.addOption("custom", "Custom Colour");
           const addGroup = (label, colours) => {
             if (!colours.length)
@@ -657,7 +853,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           };
           addGroup("Global palette", palette);
           addGroup("Private colours", pool);
-          dropdown.setValue(current ? current.id : "custom");
+          dropdown.setValue(current ? current.id : "default");
           dropdown.onChange(async (id) => {
             var _a, _b;
             if (id === "custom") {
@@ -665,9 +861,9 @@ var LexerSettingsTab = class extends BaseSettingsTab {
               colorComp.colorPickerEl.click();
               return;
             }
-            mappings[tokenType] = id;
+            mappings[tokenType] = id === "default" ? "" : id;
             programmatic = true;
-            colorComp.setValue((_b = (_a = resolve(id)) == null ? void 0 : _a.value) != null ? _b : "#ffffff");
+            colorComp.setValue((_b = (_a = resolve(mappings[tokenType])) == null ? void 0 : _a.value) != null ? _b : "#ffffff");
             programmatic = false;
             colorComp.setDisabled(true);
             await plugin.saveSettings();
@@ -689,7 +885,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
               this.refresh();
             }, () => {
               var _a2, _b;
-              dropdownComp.setValue(previousId);
+              dropdownComp.setValue(resolve(previousId) ? previousId : "default");
               programmatic = true;
               colorComp.setValue((_b = (_a2 = resolve(previousId)) == null ? void 0 : _a2.value) != null ? _b : "#ffffff");
               programmatic = false;
@@ -704,7 +900,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
 };
 
 // settings/settings.ts
-var LetterASettingTab = class extends import_obsidian4.PluginSettingTab {
+var LetterASettingTab = class extends import_obsidian5.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -730,9 +926,11 @@ var LexerSettings2 = class {
     this.enabled = enabled != null ? enabled : true;
   }
 };
+var DEFAULT_SHOP_URL = "https://raw.githubusercontent.com/mark/obsidian-lexer-shop/main";
 var DEFAULT_SETTINGS = {
   coloursPallete: default_colours,
-  lexersSettings: {}
+  lexersSettings: {},
+  shopUrl: DEFAULT_SHOP_URL
 };
 
 // lexing/api.ts
@@ -743,7 +941,7 @@ var lexers_exports = {};
 
 // main.ts
 var refreshHighlight = import_state.StateEffect.define();
-var LetterAPlugin = class extends import_obsidian5.Plugin {
+var LetterAPlugin = class extends import_obsidian6.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -751,7 +949,10 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
     // keyed by code-block extension (render path)
     this.lexersByUuid = {};
     // keyed by settings uuid (settings path)
-    // source file of each imported lexer, keyed by settings uuid (built-ins absent)
+    // the palette each lexer shipped with, keyed by settings uuid — needed
+    // again when the user restores the lexer's default colours
+    this.lexerPalettes = {};
+    // source folder of each imported lexer, keyed by settings uuid (built-ins absent)
     this.lexerSourcePaths = {};
     // transient (not persisted) — which settings sections are expanded, so a
     // re-render of the settings pane preserves the user's open/closed sections
@@ -769,15 +970,31 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
       name: "Reload lexers",
       callback: async () => {
         await this.loadLexers();
-        new import_obsidian5.Notice("Lexers reloaded");
+        new import_obsidian6.Notice("Lexers reloaded");
       }
     });
   }
   importedLexersDir() {
     return `${this.manifest.dir}/${IMPORTED_LEXERS_DIR}`;
   }
-  // scan imported_lexers/*.js; a file that fails to load is skipped with a
-  // notice and its stored settings stay untouched until it loads again
+  // all .js files under a lexer's folder, keyed by folder-relative path
+  // ('index.js', 'lib/tables.js') — the module map require() resolves in
+  async collectLexerModules(folder, root, out) {
+    const adapter = this.app.vault.adapter;
+    const listing = await adapter.list(folder);
+    for (const file of listing.files) {
+      if (!file.endsWith(".js"))
+        continue;
+      out[file.slice(root.length + 1)] = await adapter.read(file);
+    }
+    for (const sub of listing.folders) {
+      await this.collectLexerModules(sub, root, out);
+    }
+  }
+  // Scan imported_lexers/: every lexer is a FOLDER with an index.js entry,
+  // optional sibling modules (require'able), and a palette.json. A lexer
+  // that fails to load is skipped with a notice and its stored settings
+  // stay untouched until it loads again.
   async scanFileLexers() {
     const adapter = this.app.vault.adapter;
     const dir = this.importedLexersDir();
@@ -785,16 +1002,37 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
       await adapter.mkdir(dir);
     }
     await adapter.write(`${dir}/lexer-api.d.ts`, LEXER_API_DTS);
+    const listing = await adapter.list(dir);
+    for (const stray of listing.files.filter((f) => f.endsWith(".js"))) {
+      console.warn(`[lexer file] flat lexer files are no longer supported \u2014 move "${stray}" into its own folder as ${LEXER_ENTRY}`);
+      new import_obsidian6.Notice(`"${stray.split("/").pop()}" is a flat lexer file \u2014 move it into its own folder as ${LEXER_ENTRY}.`);
+    }
     const fileLexers = [];
-    for (const path of (await adapter.list(dir)).files) {
-      if (!path.endsWith(".js"))
-        continue;
+    for (const folder of listing.folders) {
       try {
-        const code = await adapter.read(path);
-        fileLexers.push({ lexer: evaluateLexerSource(code, path), path });
+        const modules = {};
+        await this.collectLexerModules(folder, folder, modules);
+        if (!(LEXER_ENTRY in modules)) {
+          if (Object.keys(modules).length) {
+            new import_obsidian6.Notice(`Lexer folder "${folder.split("/").pop()}" has no ${LEXER_ENTRY} \u2014 skipped.`);
+          }
+          continue;
+        }
+        const lexer = evaluateLexerModules(modules, LEXER_ENTRY, folder);
+        let palette = [];
+        const palettePath = paletteFilePath(folder);
+        if (await adapter.exists(palettePath)) {
+          try {
+            palette = parsePaletteSource(await adapter.read(palettePath), palettePath);
+          } catch (e) {
+            console.warn("[lexer palette]", e);
+            new import_obsidian6.Notice(`Failed to load palette: ${e instanceof Error ? e.message : e}`);
+          }
+        }
+        fileLexers.push({ lexer, palette, path: folder });
       } catch (e) {
         console.warn("[lexer file]", e);
-        new import_obsidian5.Notice(`Failed to load lexer: ${e instanceof Error ? e.message : e}`);
+        new import_obsidian6.Notice(`Failed to load lexer: ${e instanceof Error ? e.message : e}`);
       }
     }
     return fileLexers;
@@ -804,40 +1042,42 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
     this.lexers = {};
     this.lexersByUuid = {};
     this.lexerSourcePaths = {};
+    this.lexerPalettes = {};
     const seenIds = /* @__PURE__ */ new Set();
     const fileLexers = await this.scanFileLexers();
     const allLexers = [
-      ...lexers.map((lexer) => ({ lexer })),
+      ...lexers,
       ...fileLexers
     ];
     const before = JSON.stringify(this.settings.lexersSettings);
-    for (const { lexer, path } of allLexers) {
+    for (const { lexer, palette, path } of allLexers) {
       if (seenIds.has(lexer.id)) {
         console.warn(`[lexer ${lexer.id}] duplicate lexer id \u2014 skipping ${path != null ? path : "(built-in)"}`);
-        new import_obsidian5.Notice(`Lexer id "${lexer.id}" is already in use \u2014 skipping ${path != null ? path : "a duplicate"}.`);
+        new import_obsidian6.Notice(`Lexer id "${lexer.id}" is already in use \u2014 skipping ${path != null ? path : "a duplicate"}.`);
         continue;
       }
       seenIds.add(lexer.id);
-      for (const warning of validateLexer(lexer)) {
+      for (const warning of validateLexer(lexer, palette)) {
         console.warn(`[lexer ${lexer.id}] ${warning}`);
       }
       const existing = Object.entries(this.settings.lexersSettings).find(([, ls]) => ls.lexerId === lexer.id);
       const uuid = (_a = existing == null ? void 0 : existing[0]) != null ? _a : crypto.randomUUID();
       let lexerSettings = existing == null ? void 0 : existing[1];
       if (lexerSettings) {
-        reconcileLexerSettings(lexerSettings, lexer);
+        reconcileLexerSettings(lexerSettings, lexer, palette);
       } else {
-        lexerSettings = seedLexerSettings(lexer);
+        lexerSettings = seedLexerSettings(lexer, palette);
       }
       this.settings.lexersSettings[uuid] = lexerSettings;
       const occupant = this.lexers[lexerSettings.extention];
       if (occupant) {
         console.warn(`[lexer ${lexer.id}] extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive`);
-        new import_obsidian5.Notice(`Extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive until re-targeted in settings.`);
+        new import_obsidian6.Notice(`Extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive until re-targeted in settings.`);
       } else {
         this.lexers[lexerSettings.extention] = { lexer, uuid };
       }
       this.lexersByUuid[uuid] = lexer;
+      this.lexerPalettes[uuid] = palette;
       if (path) {
         this.lexerSourcePaths[uuid] = path;
       }
@@ -929,7 +1169,6 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
       return blocks;
     };
     const tokenizeBlock = (state, block) => {
-      var _a;
       if (!block.extension)
         return [];
       const registered = plugin.lexers[block.extension];
@@ -960,8 +1199,10 @@ var LetterAPlugin = class extends import_obsidian5.Plugin {
           continue;
         }
         const matchPos = block.contentFrom + token_index;
-        const colour = (_a = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type])) != null ? _a : default_colours[0];
-        ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
+        const colour = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type]);
+        if (colour) {
+          ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
+        }
         last_index = token_index + token.text.length;
       }
       return ranges;

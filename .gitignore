@@ -1,0 +1,9 @@
+# dependencies
+node_modules/
+
+# live vault state — never ships with the repo
+data.json
+imported_lexers/
+
+# tool output
+graphify-out/

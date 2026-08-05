@@ -7,9 +7,11 @@ export class Token{
 	}
 }
 
-// a colour as declared by a lexer author; becomes an entry in the lexer's
-// private pool (with a plugin-minted id) on first load
-export type DeclaredColour = {
+// one entry of the palette shipped alongside a lexer (<lexer>.palette.json);
+// becomes an entry in the lexer's private pool (with a plugin-minted id) on
+// first load. Names are frozen once shipped — they are the reconciliation
+// key across updates.
+export type PaletteColour = {
 	name: string;
 	value: string;
 }
@@ -25,18 +27,21 @@ export interface Lexer {
 	// default code-block tag (the ```tag fence), seeded on first install;
 	// the user can re-target it in settings. Falls back to name when omitted.
 	readonly defaultExtension?: string;
-	// bump when the declared contract changes (token types / colours)
+	// bump when the declared contract changes (token types / palette)
 	readonly version?: number;
-	// every colour this lexer uses — names are frozen once shipped, they are
-	// the reconciliation key across updates
-	readonly requiredColours: readonly DeclaredColour[];
-	// tokenType -> name of a colour declared in requiredColours
+	// tokenType -> name of a colour in the palette shipped alongside the
+	// lexer (unmapped or unresolvable token types fall back to the default
+	// colour at render time)
 	readonly colourMapping: Readonly<Record<string, string>>;
 	tokenize(input: string): Token[];
 }
 
-export var lexers: Lexer[] = []
+// a built-in lexer and the palette it ships with (file lexers get theirs
+// from the <lexer>.palette.json sidecar instead)
+export type BuiltinLexer = { lexer: Lexer, palette: PaletteColour[] };
 
-export async function registerLexer(lexer: Lexer){
-	lexers.push(lexer)
+export var lexers: BuiltinLexer[] = []
+
+export async function registerLexer(lexer: Lexer, palette: PaletteColour[] = []){
+	lexers.push({ lexer, palette })
 }

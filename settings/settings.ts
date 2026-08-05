@@ -65,14 +65,20 @@ export class LexerSettings {
 	}
 }
 
+// base URL of the lexer shop (raw content root) — a placeholder until the
+// remote shop exists; the user can change it in settings
+export const DEFAULT_SHOP_URL = 'https://raw.githubusercontent.com/mark/obsidian-lexer-shop/main';
+
 // 1. Define Settings Interface
 export interface LetterAPluginSettings {
 	coloursPallete: Colour[];
 	lexersSettings: Record<string, LexerSettings>;
+	shopUrl: string;
 }
 
 // there is a bug, lexers aren't initialized yet when this is created, so it is empty
 export const DEFAULT_SETTINGS: LetterAPluginSettings = {
 	coloursPallete: default_colours,
-	lexersSettings: {}
+	lexersSettings: {},
+	shopUrl: DEFAULT_SHOP_URL
 };

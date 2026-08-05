@@ -1,23 +1,23 @@
 import { Colour, ColourMapping, LexerSettings, newColourId } from "settings/settings";
-import { Lexer } from "./api";
+import { Lexer, PaletteColour } from "./api";
 
-// Sanity-checks a lexer's declaration. Returns human-readable warnings;
-// the lexer still loads best-effort (unmapped token types fall back to the
-// default colour at render time).
-export function validateLexer(lexer: Lexer): string[] {
+// Sanity-checks a lexer's declaration against the palette it ships with.
+// Returns human-readable warnings; the lexer still loads best-effort
+// (unmapped token types fall back to the default colour at render time).
+export function validateLexer(lexer: Lexer, palette: PaletteColour[]): string[] {
 	const warnings: string[] = [];
 	const seen = new Set<string>();
-	for (const colour of lexer.requiredColours) {
+	for (const colour of palette) {
 		const key = colour.name.toLowerCase();
 		if (seen.has(key)) {
-			// supplied names are the reconciliation key, duplicates are ambiguous
-			warnings.push(`duplicate required colour name "${colour.name}"`);
+			// palette names are the reconciliation key, duplicates are ambiguous
+			warnings.push(`duplicate palette colour name "${colour.name}"`);
 		}
 		seen.add(key);
 	}
 	for (const [tokenType, colourName] of Object.entries(lexer.colourMapping)) {
-		if (!lexer.requiredColours.some(c => c.name === colourName)) {
-			warnings.push(`token type "${tokenType}" maps to undeclared colour "${colourName}"`);
+		if (!palette.some(c => c.name === colourName)) {
+			warnings.push(`token type "${tokenType}" maps to colour "${colourName}" not in the palette`);
 		}
 	}
 	// a block's extension is the info string's first word, so an extension
@@ -28,32 +28,34 @@ export function validateLexer(lexer: Lexer): string[] {
 	return warnings;
 }
 
-// the lexer's declared default mappings, resolved to ids within the pool
+// The lexer's declared default mappings, resolved to ids within the pool.
+// Every declared token type gets an entry — '' when its colour isn't in the
+// pool (e.g. no palette shipped) — so it still shows up in settings and the
+// user can map it by hand. '' renders undecorated.
 function defaultMappings(lexer: Lexer, pool: Colour[]): ColourMapping {
 	const mappings: ColourMapping = {};
 	for (const [tokenType, colourName] of Object.entries(lexer.colourMapping)) {
 		const colour = pool.find(c => !c.isCustom && c.name === colourName);
-		if (colour) {
-			mappings[tokenType] = colour.id;
-		}
+		mappings[tokenType] = colour ? colour.id : '';
 	}
 	return mappings;
 }
 
-// first install: mint ids for the declared colours and map every token type
+// first install: mint ids for the palette's colours and map every token type
 // to its declared default
-export function seedLexerSettings(lexer: Lexer): LexerSettings {
-	const pool: Colour[] = lexer.requiredColours.map(c =>
+export function seedLexerSettings(lexer: Lexer, palette: PaletteColour[]): LexerSettings {
+	const pool: Colour[] = palette.map(c =>
 		({ id: newColourId(), name: c.name, value: c.value, isCustom: false }));
 	return new LexerSettings(lexer.id, lexer.defaultExtension ?? lexer.name, pool, defaultMappings(lexer, pool));
 }
 
-// Re-attach stored settings to a (possibly updated) lexer. Supplied colours
-// match by their frozen name, keeping their ids — so existing token mappings
-// keep resolving. New declarations are added, dropped ones are removed unless
-// a token still points at them. Custom colours and every user choice survive.
-export function reconcileLexerSettings(settings: LexerSettings, lexer: Lexer): void {
-	for (const declared of lexer.requiredColours) {
+// Re-attach stored settings to a (possibly updated) lexer + palette. Shipped
+// colours match by their frozen name, keeping their ids — so existing token
+// mappings keep resolving. New palette entries are added, dropped ones are
+// removed unless a token still points at them. Custom colours and every user
+// choice survive.
+export function reconcileLexerSettings(settings: LexerSettings, lexer: Lexer, palette: PaletteColour[]): void {
+	for (const declared of palette) {
 		if (!settings.privatePool.some(c => !c.isCustom && c.name === declared.name)) {
 			settings.privatePool.push({ id: newColourId(), name: declared.name, value: declared.value, isCustom: false });
 		}
@@ -61,38 +63,39 @@ export function reconcileLexerSettings(settings: LexerSettings, lexer: Lexer): v
 	const referenced = new Set(Object.values(settings.colourMappings));
 	settings.privatePool = settings.privatePool.filter(c =>
 		c.isCustom
-		|| lexer.requiredColours.some(d => d.name === c.name)
+		|| palette.some(d => d.name === c.name)
 		|| referenced.has(c.id));
 	// token types that gained a default (or are new) get seeded; existing
-	// user choices are never overwritten
+	// user choices are never overwritten. An unmapped entry ('') is not a
+	// choice — it re-seeds when a palette (finally) supplies its colour
 	const defaults = defaultMappings(lexer, settings.privatePool);
 	for (const [tokenType, colourId] of Object.entries(defaults)) {
-		if (!(tokenType in settings.colourMappings)) {
+		if (!settings.colourMappings[tokenType]) {
 			settings.colourMappings[tokenType] = colourId;
 		}
 	}
 }
 
-// Restore the lexer's declared defaults: supplied colour values and all token
-// mappings reset to the declaration. The global palette, the extension rename
+// Restore the lexer's declared defaults: shipped colour values and all token
+// mappings reset to the palette. The global palette, the extension rename
 // and the enabled flag are untouched. Custom private colours are kept or
 // dropped per the user's choice.
-export function restoreLexerDefaults(settings: LexerSettings, lexer: Lexer, keepCustomColours: boolean): void {
+export function restoreLexerDefaults(settings: LexerSettings, lexer: Lexer, palette: PaletteColour[], keepCustomColours: boolean): void {
 	for (const colour of settings.privatePool) {
 		if (colour.isCustom) continue;
-		const declared = lexer.requiredColours.find(d => d.name === colour.name);
+		const declared = palette.find(d => d.name === colour.name);
 		if (declared) {
 			colour.value = declared.value;
 		}
 	}
-	for (const declared of lexer.requiredColours) {
+	for (const declared of palette) {
 		if (!settings.privatePool.some(c => !c.isCustom && c.name === declared.name)) {
 			settings.privatePool.push({ id: newColourId(), name: declared.name, value: declared.value, isCustom: false });
 		}
 	}
-	// mappings now reference declared colours only, so orphaned supplied
+	// mappings now reference palette colours only, so orphaned shipped
 	// colours (and, if chosen, the customs) can be purged safely
 	settings.privatePool = settings.privatePool.filter(c =>
-		c.isCustom ? keepCustomColours : lexer.requiredColours.some(d => d.name === c.name));
+		c.isCustom ? keepCustomColours : palette.some(d => d.name === c.name));
 	settings.colourMappings = defaultMappings(lexer, settings.privatePool);
 }

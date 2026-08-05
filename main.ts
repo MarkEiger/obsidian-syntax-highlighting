@@ -10,10 +10,9 @@ import {
 
 import { LetterASettingTab, LexerSettings } from 'settings/settings';
 import { LetterAPluginSettings, DEFAULT_SETTINGS, Colour } from 'settings/settings';
-import { Lexer, lexers } from 'lexing/api';
+import { Lexer, PaletteColour, lexers } from 'lexing/api';
 import { validateLexer, seedLexerSettings, reconcileLexerSettings } from 'lexing/reconcile';
-import { FileLexer, IMPORTED_LEXERS_DIR, LEXER_API_DTS, evaluateLexerSource } from 'lexing/loader';
-import { default_colours } from 'settings/pallet';
+import { FileLexer, IMPORTED_LEXERS_DIR, LEXER_API_DTS, LEXER_ENTRY, evaluateLexerModules, paletteFilePath, parsePaletteSource } from 'lexing/loader';
 import 'lexing';
 
 type RegisteredLexer = {lexer: Lexer, uuid: string};
@@ -36,7 +35,10 @@ export default class LetterAPlugin extends Plugin {
 	settings: LetterAPluginSettings = DEFAULT_SETTINGS;
 	lexers: LexersMap =  {}          // keyed by code-block extension (render path)
 	lexersByUuid: Record<string, Lexer> = {}  // keyed by settings uuid (settings path)
-	// source file of each imported lexer, keyed by settings uuid (built-ins absent)
+	// the palette each lexer shipped with, keyed by settings uuid — needed
+	// again when the user restores the lexer's default colours
+	lexerPalettes: Record<string, PaletteColour[]> = {}
+	// source folder of each imported lexer, keyed by settings uuid (built-ins absent)
 	lexerSourcePaths: Record<string, string> = {}
 	// transient (not persisted) — which settings sections are expanded, so a
 	// re-render of the settings pane preserves the user's open/closed sections
@@ -69,8 +71,24 @@ export default class LetterAPlugin extends Plugin {
 		return `${this.manifest.dir}/${IMPORTED_LEXERS_DIR}`;
 	}
 
-	// scan imported_lexers/*.js; a file that fails to load is skipped with a
-	// notice and its stored settings stay untouched until it loads again
+	// all .js files under a lexer's folder, keyed by folder-relative path
+	// ('index.js', 'lib/tables.js') — the module map require() resolves in
+	private async collectLexerModules(folder: string, root: string, out: Record<string, string>): Promise<void> {
+		const adapter = this.app.vault.adapter;
+		const listing = await adapter.list(folder);
+		for (const file of listing.files) {
+			if (!file.endsWith('.js')) continue;
+			out[file.slice(root.length + 1)] = await adapter.read(file);
+		}
+		for (const sub of listing.folders) {
+			await this.collectLexerModules(sub, root, out);
+		}
+	}
+
+	// Scan imported_lexers/: every lexer is a FOLDER with an index.js entry,
+	// optional sibling modules (require'able), and a palette.json. A lexer
+	// that fails to load is skipped with a notice and its stored settings
+	// stay untouched until it loads again.
 	async scanFileLexers(): Promise<FileLexer[]> {
 		const adapter = this.app.vault.adapter;
 		const dir = this.importedLexersDir();
@@ -80,12 +98,39 @@ export default class LetterAPlugin extends Plugin {
 		// keep the dev-time type stubs in sync with the installed plugin
 		await adapter.write(`${dir}/lexer-api.d.ts`, LEXER_API_DTS);
 
+		const listing = await adapter.list(dir);
+		// flat .js files were the pre-folder format — never silently ignored
+		for (const stray of listing.files.filter(f => f.endsWith('.js'))) {
+			console.warn(`[lexer file] flat lexer files are no longer supported — move "${stray}" into its own folder as ${LEXER_ENTRY}`);
+			new Notice(`"${stray.split('/').pop()}" is a flat lexer file — move it into its own folder as ${LEXER_ENTRY}.`);
+		}
+
 		const fileLexers: FileLexer[] = [];
-		for (const path of (await adapter.list(dir)).files) {
-			if (!path.endsWith('.js')) continue;
+		for (const folder of listing.folders) {
 			try {
-				const code = await adapter.read(path);
-				fileLexers.push({ lexer: evaluateLexerSource(code, path), path });
+				const modules: Record<string, string> = {};
+				await this.collectLexerModules(folder, folder, modules);
+				if (!(LEXER_ENTRY in modules)) {
+					if (Object.keys(modules).length) {
+						new Notice(`Lexer folder "${folder.split('/').pop()}" has no ${LEXER_ENTRY} — skipped.`);
+					}
+					continue; // empty folder: nothing to say
+				}
+				const lexer = evaluateLexerModules(modules, LEXER_ENTRY, folder);
+				// palette.json inside the folder. A missing or broken palette
+				// doesn't block the lexer — its token types just fall back to
+				// the default colour
+				let palette: PaletteColour[] = [];
+				const palettePath = paletteFilePath(folder);
+				if (await adapter.exists(palettePath)) {
+					try {
+						palette = parsePaletteSource(await adapter.read(palettePath), palettePath);
+					} catch (e) {
+						console.warn('[lexer palette]', e);
+						new Notice(`Failed to load palette: ${e instanceof Error ? e.message : e}`);
+					}
+				}
+				fileLexers.push({ lexer, palette, path: folder });
 			} catch (e) {
 				console.warn('[lexer file]', e);
 				new Notice(`Failed to load lexer: ${e instanceof Error ? e.message : e}`);
@@ -98,23 +143,24 @@ export default class LetterAPlugin extends Plugin {
 		this.lexers = {};
 		this.lexersByUuid = {};
 		this.lexerSourcePaths = {};
+		this.lexerPalettes = {};
 		const seenIds = new Set<string>();
 
 		const fileLexers = await this.scanFileLexers();
-		const allLexers: { lexer: Lexer, path?: string }[] = [
-			...lexers.map(lexer => ({ lexer })),
+		const allLexers: { lexer: Lexer, palette: PaletteColour[], path?: string }[] = [
+			...lexers,
 			...fileLexers,
 		];
 		const before = JSON.stringify(this.settings.lexersSettings);
 
-		for (const { lexer, path } of allLexers){
+		for (const { lexer, palette, path } of allLexers){
 			if (seenIds.has(lexer.id)) {
 				console.warn(`[lexer ${lexer.id}] duplicate lexer id — skipping ${path ?? '(built-in)'}`);
 				new Notice(`Lexer id "${lexer.id}" is already in use — skipping ${path ?? 'a duplicate'}.`);
 				continue;
 			}
 			seenIds.add(lexer.id);
-			for (const warning of validateLexer(lexer)) {
+			for (const warning of validateLexer(lexer, palette)) {
 				console.warn(`[lexer ${lexer.id}] ${warning}`);
 			}
 
@@ -125,9 +171,9 @@ export default class LetterAPlugin extends Plugin {
 			const uuid = existing?.[0] ?? crypto.randomUUID();
 			let lexerSettings = existing?.[1];
 			if (lexerSettings) {
-				reconcileLexerSettings(lexerSettings, lexer);
+				reconcileLexerSettings(lexerSettings, lexer, palette);
 			} else {
-				lexerSettings = seedLexerSettings(lexer);
+				lexerSettings = seedLexerSettings(lexer, palette);
 			}
 
 			// settings of lexers that failed to load / were removed stay in
@@ -144,6 +190,7 @@ export default class LetterAPlugin extends Plugin {
 				this.lexers[lexerSettings.extention] = {lexer: lexer, uuid: uuid};
 			}
 			this.lexersByUuid[uuid] = lexer;
+			this.lexerPalettes[uuid] = palette;
 			if (path) {
 				this.lexerSourcePaths[uuid] = path;
 			}
@@ -281,8 +328,12 @@ export default class LetterAPlugin extends Plugin {
 					continue;
 				}
 				const matchPos = block.contentFrom + token_index;
-				const colour: Colour = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type]) ?? default_colours[0];
-				ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
+				// unmapped or unresolvable token types stay undecorated — the
+				// editor's normal text colour, never a loud fallback
+				const colour: Colour | undefined = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type]);
+				if (colour) {
+					ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
+				}
 				last_index = token_index + token.text.length;
 			}
 			return ranges;
