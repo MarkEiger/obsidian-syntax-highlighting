@@ -102,7 +102,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						}
 						// same id would just be skipped at load — reject here
 						// with a clear message instead
-						const clash = Object.values(plugin.lexersByUuid).some(l => l.id === imported.id);
+						const clash = Object.values(plugin.registry.byUuid).some(l => l.id === imported.id);
 						if (clash) {
 							new Notice(`Lexer id "${imported.id}" is already installed — use its Update option instead.`);
 							return;
@@ -142,7 +142,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 				}));
 
 		for (const [uuid, lexerSettings] of Object.entries(plugin.settings.lexersSettings)){
-			const lexer = plugin.lexersByUuid[uuid];
+			const lexer = plugin.registry.byUuid[uuid];
 			// settings kept for a lexer that isn't currently loaded — invisible
 			// until its file loads again
 			if (!lexer) continue;
@@ -161,28 +161,12 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						const value = text.getValue().trim();
 						const prev = lexerSettings.extention;
 						if (value === prev) return;
-						const reject = (reason: string) => {
+						const reason = plugin.registry.retargetLexer(plugin.settings.lexersSettings, uuid, value);
+						if (reason) {
 							new Notice(reason);
 							text.setValue(prev);
-						};
-						if (!value) return reject('Extension cannot be empty.');
-						if (/\s/.test(value)) return reject('Extension must be a single word.');
-						// check stored settings, not just loaded lexers — a
-						// clash with an unloaded lexer would resurface on load
-						const clash = Object.entries(plugin.settings.lexersSettings)
-							.find(([otherUuid, ls]) => otherUuid !== uuid && ls.extention === value);
-						if (clash) {
-							const clashLexer = plugin.lexersByUuid[clash[0]];
-							const clashName = clashLexer ? `"${clashLexer.name}"` : `id "${clash[1].lexerId}" (not loaded)`;
-							return reject(`Extension "${value}" is already targeted by ${clashName}.`);
+							return;
 						}
-						// the slot may belong to another lexer if this one lost
-						// a collision at load time — only free it if it's ours
-						if (plugin.lexers[prev]?.uuid === uuid) {
-							delete plugin.lexers[prev];
-						}
-						lexerSettings.extention = value;
-						plugin.lexers[value] = { lexer, uuid };
 						await plugin.saveSettings();
 					};
 					text.inputEl.addEventListener('blur', () => { void commit(); });
@@ -208,7 +192,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 						.setIcon('rotate-ccw')
 						.onClick(() => {
 							new RestoreDefaultsModal(plugin.app, lexer.name, async keepCustomColours => {
-								restoreLexerDefaults(lexerSettings, lexer, plugin.lexerPalettes[uuid] ?? [], keepCustomColours);
+								restoreLexerDefaults(lexerSettings, lexer, plugin.registry.palettes[uuid] ?? [], keepCustomColours);
 								await plugin.saveSettings();
 								this.refresh();
 							}).open();
@@ -220,7 +204,7 @@ export class LexerSettingsTab extends BaseSettingsTab {
 							new PrivatePaletteModal(plugin, lexerSettings, lexer.name, () => this.refresh()).open();
 						}));
 					// imported lexers can be updated from a new .js file
-					const sourcePath = plugin.lexerSourcePaths[uuid];
+					const sourcePath = plugin.registry.origins[uuid];
 					if (sourcePath) {
 						menu.addItem(item => item
 							.setTitle('Update lexer')

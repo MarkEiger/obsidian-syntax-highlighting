@@ -1,0 +1,842 @@
+<title>Letter A Settings Lab</title>
+<style>
+  :root {
+    --bg: #161618;
+    --pane: #1e1e21;
+    --card: #232327;
+    --card2: #28282d;
+    --line: #333338;
+    --line-soft: #2b2b30;
+    --text: #dcddde;
+    --muted: #9a9aa3;
+    --faint: #6f6f78;
+    --accent: #8b7cf5;
+    --accent-soft: rgba(139, 124, 245, 0.16);
+    --mod: #e0a94e;
+    --danger: #e06c75;
+    --ok: #8bc78f;
+    --code-bg: #19191c;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Ubuntu, Cantarell, "Noto Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, .mono { font-family: ui-monospace, "JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace; }
+
+  .frame { max-width: 1180px; margin: 0 auto; padding: 28px 20px 80px; }
+  .topbar { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .topbar h1 { font-size: 20px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+  .topbar .sub { color: var(--muted); font-size: 13px; }
+  .intro {
+    color: var(--muted); font-size: 13px; max-width: 68ch; margin: 4px 0 22px;
+  }
+  .intro b { color: var(--text); font-weight: 600; }
+
+  .cols { display: flex; gap: 22px; align-items: flex-start; }
+  .settings { flex: 1 1 620px; min-width: 0; }
+  .side { flex: 0 0 400px; position: sticky; top: 20px; display: flex; flex-direction: column; gap: 16px; }
+  @media (max-width: 980px) {
+    .cols { flex-direction: column; }
+    .side { position: static; flex: 1 1 auto; width: 100%; }
+  }
+
+  /* ---------- settings pane, obsidian idiom ---------- */
+  .pane { background: var(--pane); border: 1px solid var(--line-soft); border-radius: 12px; padding: 18px 20px 22px; }
+  h3.sect {
+    font-size: 15px; font-weight: 650; margin: 26px 0 4px; padding-bottom: 7px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  h3.sect:first-child { margin-top: 2px; }
+  .spec { color: var(--faint); font-size: 11px; font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 400; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 4px 0 12px; max-width: 62ch; }
+
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 8px 0; border-bottom: 1px solid var(--line-soft);
+  }
+  .row:last-child { border-bottom: none; }
+  .row .lhs { min-width: 0; }
+  .row .name { font-size: 13.5px; }
+  .row .desc { font-size: 12px; color: var(--muted); }
+  .row .ctl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* lexer card */
+  .lexcard { background: var(--card); border: 1px solid var(--line-soft); border-radius: var(--radius); margin: 12px 0; overflow: hidden; }
+  .lexhead {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer;
+    user-select: none;
+  }
+  .lexhead:hover { background: var(--card2); }
+  .chev { color: var(--faint); font-size: 11px; width: 12px; transition: transform 0.15s; }
+  .open .chev { transform: rotate(90deg); }
+  .lexhead .lname { font-weight: 600; font-size: 14px; }
+  .chip {
+    font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 20px; padding: 1px 8px; font-family: ui-monospace, Menlo, Consolas, monospace;
+  }
+  .chip.ver { color: var(--accent); border-color: var(--accent-soft); }
+  .lexbody { padding: 2px 16px 16px; border-top: 1px solid var(--line-soft); }
+  .subhead { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 16px 0 6px; display: flex; gap: 8px; align-items: baseline; }
+
+  /* toggle */
+  .tgl { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .tgl input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .tgl .knob {
+    position: absolute; inset: 0; background: var(--line); border-radius: 20px; transition: background 0.15s;
+    pointer-events: none;
+  }
+  .tgl .knob::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--text); transition: transform 0.15s;
+  }
+  .tgl input:checked + .knob { background: var(--accent); }
+  .tgl input:checked + .knob::after { transform: translateX(16px); }
+  .tgl input:focus-visible + .knob { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* tags */
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 2px 4px 2px 8px;
+  }
+  .tag button { all: unset; cursor: pointer; color: var(--faint); padding: 0 3px; border-radius: 3px; }
+  .tag button:hover { color: var(--danger); }
+  .tagadd { width: 90px; }
+
+  /* themes list */
+  .themerow {
+    display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .themerow:hover { background: var(--card2); }
+  .themerow.editing { background: var(--accent-soft); border-color: rgba(139,124,245,0.35); }
+  .themerow input[type="radio"] { accent-color: var(--accent); margin: 0; cursor: pointer; }
+  .themerow .tname { font-size: 13px; flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; }
+  .badge {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 6px; border-radius: 4px;
+    border: 1px solid var(--line); color: var(--muted);
+  }
+  .badge.shipped { color: var(--accent); border-color: rgba(139,124,245,0.4); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mod); flex-shrink: 0; }
+
+  /* entry table */
+  .entries { border: 1px solid var(--line-soft); border-radius: var(--radius); overflow: hidden; }
+  .entry {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft);
+    background: var(--card);
+  }
+  .entry:last-child { border-bottom: none; }
+  .entry .tt { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; width: 96px; flex-shrink: 0; color: var(--text); }
+  .entry .warn { font-size: 11px; color: var(--mod); }
+  .flags { display: flex; gap: 3px; }
+  .fbtn {
+    all: unset; cursor: pointer; width: 22px; height: 22px; display: grid; place-items: center;
+    border: 1px solid var(--line); border-radius: 5px; font-size: 11.5px; color: var(--muted);
+  }
+  .fbtn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+  .fbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .fbtn.b { font-weight: 700; } .fbtn.i { font-style: italic; } .fbtn.u { text-decoration: underline; }
+
+  /* palette */
+  .palrow { display: flex; align-items: center; gap: 9px; padding: 5px 2px; }
+  .swatch { width: 18px; height: 18px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.18); flex-shrink: 0; position: relative; }
+  .swatch input[type="color"] { position: absolute; inset: -3px; opacity: 0; cursor: pointer; width: auto; height: auto; }
+  .swatch.locked { cursor: default; }
+  .palrow .pname { font-size: 13px; flex: 0 1 auto; min-width: 70px; }
+  .palrow .hex { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; color: var(--faint); }
+  .lock { color: var(--faint); font-size: 11px; }
+  .spacer { flex: 1; }
+
+  /* generic controls */
+  select, input[type="text"] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+    font: inherit; font-size: 12.5px; padding: 3px 7px;
+  }
+  select { max-width: 190px; }
+  select:focus-visible, input[type="text"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+  .btn {
+    all: unset; cursor: pointer; font-size: 12px; color: var(--text); background: var(--card2);
+    border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; line-height: 1.5;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn.subtle { background: transparent; color: var(--muted); border-color: transparent; padding: 3px 6px; }
+  .btn.subtle:hover { color: var(--text); border-color: var(--line); }
+  .btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #141416; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .btn[disabled] { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+  .btn.revert { color: var(--mod); }
+  .btn.revert:hover { border-color: var(--mod); }
+  .inline-name { width: 120px; }
+
+  /* ---------- preview side ---------- */
+  .prevcard { background: var(--pane); border: 1px solid var(--line-soft); border-radius: 12px; padding: 14px 16px; }
+  .prevcard h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 650; }
+  .fence { background: var(--code-bg); border: 1px solid var(--line-soft); border-radius: 8px; margin: 10px 0; overflow: hidden; }
+  .fence .fhead {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--faint);
+    padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
+  }
+  .fence .fhead .themetag { color: var(--muted); }
+  .fence pre { margin: 0; padding: 10px 12px; overflow-x: auto; font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.55; }
+  .fence.off pre span { color: var(--muted) !important; font-weight: normal !important; font-style: normal !important; text-decoration: none !important; }
+  .offnote { font-size: 11px; color: var(--faint); padding: 0 10px 8px; }
+
+  .demo-ops { display: flex; flex-direction: column; gap: 8px; }
+  .demo-ops p { margin: 0; font-size: 12.5px; color: var(--muted); }
+
+  /* toasts */
+  .toasts { position: fixed; top: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; max-width: 320px; }
+  .toast {
+    background: var(--card2); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 9px 12px; font-size: 12.5px; color: var(--text);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45); cursor: pointer;
+    animation: slidein 0.18s ease-out;
+  }
+  .toast.warn { border-left-color: var(--mod); }
+  .toast.err { border-left-color: var(--danger); }
+  @keyframes slidein { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="frame">
+  <div class="topbar">
+    <h1>Letter A Settings Lab</h1>
+    <span class="sub">interactive mockup of the v2 spec — nothing here is the real plugin</span>
+  </div>
+  <p class="intro">
+    Play with everything: edit a <b>shipped theme</b> in place and watch the revert arrows appear,
+    try to touch a <b>supplied colour</b> (you can't — copy it instead), delete a colour that's in use,
+    and press <b>Simulate lexer update</b> to see the three-way merge keep your edits.
+    Faint <span class="spec">[5e]</span> tags point at the spec item each mechanic comes from.
+  </p>
+
+  <div class="cols">
+    <main class="settings pane" id="settings"></main>
+    <aside class="side">
+      <div class="prevcard">
+        <h4>Live preview — editor</h4>
+        <div id="preview"></div>
+      </div>
+      <div class="prevcard demo-ops">
+        <h4>Demo controls</h4>
+        <p>Ships NASM v3: adds token type <code>macro</code>, recolours <i>Amber</i>, adds <i>Cyan</i>, removes <i>Violet</i>, and changes some shipped mappings. Entries you edited survive; untouched ones follow the update. <span class="spec">[5b, 6b]</span></p>
+        <div style="display:flex; gap:8px;">
+          <button class="btn primary" data-act="sim-update" id="updbtn">Simulate lexer update</button>
+          <button class="btn" data-act="reset-demo">Reset demo</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+'use strict';
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const BUILTIN_DEFAULT_HEX = '#dcddde';
+
+/* ---------------- sample token streams ---------------- */
+const NASM_SAMPLE_V2 = [
+  [['section','directive'],[' ',null],['.text','label'],['     ',null],['; write & exit','comment']],
+  [['global','directive'],[' ',null],['_start','label']],
+  [['_start:','label']],
+  [['    ',null],['mov','instruction'],[' ',null],['eax','register'],[', ',null],['4','number'],['       ',null],['; sys_write','comment']],
+  [['    ',null],['mov','instruction'],[' ',null],['ebx','register'],[', ',null],['1','number']],
+  [['    ',null],['int','instruction'],[' ',null],['0x80','number']],
+];
+const NASM_SAMPLE_V3 = [
+  [['%define','macro'],[' ',null],['SYS_WRITE','macro'],[' ',null],['4','number']],
+  ...NASM_SAMPLE_V2.slice(0, 3),
+  [['    ',null],['mov','instruction'],[' ',null],['eax','register'],[', ',null],['SYS_WRITE','macro']],
+  ...NASM_SAMPLE_V2.slice(4),
+];
+const JSON_SAMPLE = [
+  [['{','punctuation']],
+  [['  ',null],['"name"','key'],[': ','punctuation'],['"letter-a"','string'],[',','punctuation']],
+  [['  ',null],['"version"','key'],[': ','punctuation'],['2','number'],[',','punctuation']],
+  [['  ',null],['"enabled"','key'],[': ','punctuation'],['true','boolean']],
+  [['}','punctuation']],
+];
+
+/* ---------------- initial state ---------------- */
+function entry(colour, extra) { return { shipped: Object.assign({ colour }, extra), current: Object.assign({ colour }, extra) }; }
+
+function makeInitialState() {
+  return {
+    global: {
+      supplied: { 'default': { name: 'Default', hex: BUILTIN_DEFAULT_HEX } },
+      custom: { 'g-rose': { name: 'Rose Pink', hex: '#ff79c6' } },
+    },
+    lexers: [
+      {
+        id: 'alfred.nasm', name: 'NASM Assembly', version: 2, enabled: true, tags: ['nasm', 'asm'],
+        tokenTypes: ['instruction', 'register', 'number', 'label', 'directive', 'comment'],
+        palette: {
+          supplied: {
+            'n-sky':    { name: 'Sky',    hex: '#61afef' },
+            'n-rose':   { name: 'Rose',   hex: '#e06c75' },
+            'n-amber':  { name: 'Amber',  hex: '#d19a66' },
+            'n-violet': { name: 'Violet', hex: '#c678dd' },
+            'n-mint':   { name: 'Mint',   hex: '#98c379' },
+            'n-slate':  { name: 'Slate',  hex: '#7f848e' },
+          },
+          custom: {},
+        },
+        themes: [
+          { uuid: 't-classic', name: 'NASM Classic', origin: 'shipped', entries: {
+            instruction: entry('n-sky'), register: entry('n-rose'), number: entry('n-amber'),
+            label: entry('n-violet'), directive: entry('n-mint', { bold: true }), comment: entry('n-slate', { italic: true }),
+          }},
+          { uuid: 't-mid', name: 'Midnight', origin: 'shipped', entries: {
+            instruction: entry('n-violet', { bold: true }), register: entry('n-sky'), number: entry('n-mint'),
+            label: entry('n-amber'), directive: entry('n-rose'), comment: entry('n-slate', { italic: true }),
+          }},
+        ],
+        activeTheme: 't-classic',
+        sample: NASM_SAMPLE_V2,
+      },
+      {
+        id: 'alfred.json', name: 'JSON', version: 1, enabled: true, tags: ['json'],
+        tokenTypes: ['key', 'string', 'number', 'boolean', 'punctuation'],
+        palette: {
+          supplied: {
+            'j-blue':   { name: 'Cornflower', hex: '#7aa2f7' },
+            'j-green':  { name: 'Spring',     hex: '#9ece6a' },
+            'j-orange': { name: 'Apricot',    hex: '#ff9e64' },
+            'j-purple': { name: 'Lilac',      hex: '#bb9af7' },
+            'j-grey':   { name: 'Ash',        hex: '#737aa2' },
+          },
+          custom: {},
+        },
+        themes: [
+          { uuid: 't-json', name: 'JSON Default', origin: 'shipped', entries: {
+            key: entry('j-blue'), string: entry('j-green'), number: entry('j-orange'),
+            boolean: entry('j-purple', { bold: true }), punctuation: entry('j-grey'),
+          }},
+        ],
+        activeTheme: 't-json',
+        sample: JSON_SAMPLE,
+      },
+    ],
+  };
+}
+
+let state = makeInitialState();
+const ui = { open: new Set(['alfred.nasm']), editing: {}, counter: 0 };
+
+/* ---------------- helpers ---------------- */
+const lexerById = (id) => state.lexers.find((l) => l.id === id);
+const themeByUuid = (lx, uuid) => lx.themes.find((t) => t.uuid === uuid);
+function editingTheme(lx) {
+  const uuid = ui.editing[lx.id] || lx.activeTheme;
+  return themeByUuid(lx, uuid) || lx.themes[0];
+}
+function resolveColour(lx, uuid) {
+  return state.global.supplied[uuid] || state.global.custom[uuid]
+    || lx.palette.supplied[uuid] || lx.palette.custom[uuid] || null;
+}
+const entryModified = (e) => !!e.shipped && !eq(e.shipped, e.current);
+const themeModified = (t) => Object.values(t.entries).some(entryModified);
+
+function colourRefs(uuid) {
+  const refs = [];
+  for (const lx of state.lexers)
+    for (const t of lx.themes)
+      for (const [tt, e] of Object.entries(t.entries))
+        if (e.current.colour === uuid) refs.push(`${t.name} → ${tt}`);
+  return refs;
+}
+function uniqueName(pool, base) {
+  const names = new Set(Object.values(pool).map((c) => c.name));
+  if (!names.has(base)) return base;
+  let n = 2;
+  while (names.has(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
+}
+function toast(msg, kind) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind ? ' ' + kind : '');
+  el.textContent = msg;
+  el.addEventListener('click', () => el.remove());
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 6500);
+}
+
+/* ---------------- render: settings ---------------- */
+function palRowHtml(scope, uuid, c, opts) {
+  const locked = opts.locked;
+  const swatch = locked
+    ? `<span class="swatch locked" style="background:${esc(c.hex)}"></span>`
+    : `<span class="swatch" style="background:${esc(c.hex)}"><input type="color" value="${esc(c.hex)}" data-act="col-hex" data-scope="${scope}" data-uuid="${esc(uuid)}" aria-label="Edit colour ${esc(c.name)}"></span>`;
+  const name = opts.rename
+    ? `<input type="text" class="inline-name" value="${esc(c.name)}" data-act="col-rename" data-scope="${scope}" data-uuid="${esc(uuid)}" aria-label="Rename colour">`
+    : `<span class="pname">${esc(c.name)}</span>`;
+  return `<div class="palrow">
+    ${swatch}${name}
+    <span class="hex">${esc(c.hex)}</span>
+    ${locked ? '<span class="lock" title="Supplied by the lexer — immutable">🔒</span>' : ''}
+    <span class="spacer"></span>
+    ${opts.buttons || ''}
+  </div>`;
+}
+
+function colourOptions(lx, selected) {
+  const group = (label, pool) => {
+    const opts = Object.entries(pool).map(([uuid, c]) =>
+      `<option value="${esc(uuid)}" ${uuid === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+    return opts ? `<optgroup label="${esc(label)}">${opts}</optgroup>` : '';
+  };
+  let html = group(`${lx.name} — supplied`, lx.palette.supplied)
+    + group(`${lx.name} — custom`, lx.palette.custom)
+    + group('Global — supplied', state.global.supplied)
+    + group('Global — custom', state.global.custom);
+  if (selected && !resolveColour(lx, selected))
+    html = `<option value="${esc(selected)}" selected>(missing colour)</option>` + html;
+  return html;
+}
+
+function renderSettings() {
+  const g = state.global;
+  const defaultC = g.supplied['default'];
+  const defaultDirty = defaultC.hex !== BUILTIN_DEFAULT_HEX;
+
+  let html = `
+    <h3 class="sect">Global palette <span class="spec">[4, 4a]</span></h3>
+    <p class="hint">One palette shared by every lexer. <b>Default</b> is the reserved fallback — the only supplied colour you can edit, and it reverts to its built-in value. Unmapped or unknown token types render with it.</p>
+    <div class="palrow">
+      <span class="swatch" style="background:${esc(defaultC.hex)}">
+        <input type="color" value="${esc(defaultC.hex)}" data-act="default-hex" aria-label="Edit default colour">
+      </span>
+      <span class="pname">Default</span>
+      <span class="hex">${esc(defaultC.hex)}</span>
+      <span class="badge">reserved</span>
+      <span class="spacer"></span>
+      ${defaultDirty ? '<button class="btn revert" data-act="revert-default" title="Back to built-in value">↩ revert</button>' : ''}
+    </div>
+    <div class="subhead">Custom colours <span class="spec">[13]</span></div>
+    ${Object.entries(g.custom).map(([uuid, c]) => palRowHtml('global', uuid, c, {
+      rename: true,
+      buttons: `<button class="btn subtle danger" data-act="col-del" data-scope="global" data-uuid="${esc(uuid)}" title="Delete (blocked while referenced)">delete</button>`,
+    })).join('') || '<p class="hint" style="margin:2px 0 6px">No custom colours yet.</p>'}
+    <button class="btn" data-act="col-add" data-scope="global">+ Add colour</button>
+
+    <h3 class="sect">Lexers <span class="spec">[15]</span></h3>
+    <p class="hint">Each lexer owns fence-tag bindings, a private palette (supplied + custom), and its themes. Toggle one off to see its blocks render plain.</p>
+  `;
+
+  for (const lx of state.lexers) {
+    const open = ui.open.has(lx.id);
+    const et = editingTheme(lx);
+    html += `<div class="lexcard ${open ? 'open' : ''}">
+      <div class="lexhead" data-act="toggle-open" data-lexer="${esc(lx.id)}" role="button" tabindex="0" aria-expanded="${open}">
+        <span class="chev">▶</span>
+        <span class="lname">${esc(lx.name)}</span>
+        <span class="chip">${esc(lx.id)}</span>
+        <span class="chip ver">v${lx.version}</span>
+        <span class="spacer"></span>
+        <label class="tgl" title="Enable highlighting" data-stop>
+          <input type="checkbox" ${lx.enabled ? 'checked' : ''} data-act="toggle-enabled" data-lexer="${esc(lx.id)}" aria-label="Enable ${esc(lx.name)}">
+          <span class="knob"></span>
+        </label>
+      </div>`;
+
+    if (open) {
+      html += `<div class="lexbody">
+        <div class="subhead">Fence tags <span class="spec">[0a–0c]</span></div>
+        <div class="tags">
+          ${lx.tags.map((t) => `<span class="tag">${esc(t)}<button data-act="remove-tag" data-lexer="${esc(lx.id)}" data-tag="${esc(t)}" title="Unbind" aria-label="Unbind tag ${esc(t)}">×</button></span>`).join('')}
+          <input type="text" class="tagadd" placeholder="add tag…" data-act="add-tag" data-lexer="${esc(lx.id)}" aria-label="Add fence tag">
+        </div>
+
+        <div class="subhead">Themes <span class="spec">[5d–5f]</span></div>
+        <p class="hint" style="margin:0 0 6px">Radio = active theme. Click a row to edit it below. Shipped themes edit in place — the amber dot means "differs from shipped", and revert brings it back.</p>
+        ${lx.themes.map((t) => {
+          const mod = themeModified(t);
+          const isEditing = et.uuid === t.uuid;
+          return `<div class="themerow ${isEditing ? 'editing' : ''}" data-act="sel-theme" data-lexer="${esc(lx.id)}" data-theme="${esc(t.uuid)}">
+            <input type="radio" name="active-${esc(lx.id)}" ${lx.activeTheme === t.uuid ? 'checked' : ''} data-act="set-active" data-lexer="${esc(lx.id)}" data-theme="${esc(t.uuid)}" title="Set active" aria-label="Activate ${esc(t.name)}" data-stop>
+            <span class="tname">
+              ${t.origin === 'user'
+                ? `<input type="text" class="inline-name" value="${esc(t.name)}" data-act="rename-theme" data-lexer="${esc(lx.id)}" data-theme="${esc(t.uuid)}" data-stop aria-label="Rename theme">`
+                : esc(t.name)}
+              ${mod ? '<span class="dot" title="Has edits — differs from shipped"></span>' : ''}
+            </span>
+            <span class="badge ${t.origin}">${t.origin}</span>
+            ${t.origin === 'shipped'
+              ? `<button class="btn subtle revert" data-act="revert-theme" data-lexer="${esc(lx.id)}" data-theme="${esc(t.uuid)}" ${mod ? '' : 'disabled'} title="Revert every entry to shipped" data-stop>↩ revert</button>`
+              : `<button class="btn subtle danger" data-act="del-theme" data-lexer="${esc(lx.id)}" data-theme="${esc(t.uuid)}" title="Delete user theme" data-stop>delete</button>`}
+            <button class="btn subtle" data-act="dup-theme" data-lexer="${esc(lx.id)}" data-theme="${esc(t.uuid)}" title="Duplicate as user theme" data-stop>⧉</button>
+          </div>`;
+        }).join('')}
+        <div style="margin-top:6px"><button class="btn" data-act="new-theme" data-lexer="${esc(lx.id)}">+ New theme</button></div>
+
+        <div class="subhead">Editing “${esc(et.name)}” <span class="spec">[1c, 5e]</span></div>
+        <div class="entries">
+          ${lx.tokenTypes.map((tt) => {
+            const e = et.entries[tt];
+            if (!e) return '';
+            const missing = !resolveColour(lx, e.current.colour);
+            const mod = entryModified(e);
+            return `<div class="entry">
+              <span class="tt">${esc(tt)}</span>
+              <select data-act="entry-colour" data-lexer="${esc(lx.id)}" data-theme="${esc(et.uuid)}" data-tt="${esc(tt)}" aria-label="Colour for ${esc(tt)}">
+                ${colourOptions(lx, e.current.colour)}
+              </select>
+              <span class="flags">
+                ${['bold','italic','underline'].map((f) => `<button class="fbtn ${f[0]} ${e.current[f] ? 'on' : ''}" data-act="entry-flag" data-lexer="${esc(lx.id)}" data-theme="${esc(et.uuid)}" data-tt="${esc(tt)}" data-flag="${f}" title="${f}" aria-pressed="${!!e.current[f]}">${f[0].toUpperCase()}</button>`).join('')}
+              </span>
+              ${missing ? '<span class="warn" title="This colour was removed by a lexer update — renders with Default">⚠ missing</span>' : ''}
+              <span class="spacer"></span>
+              ${mod ? '<span class="dot" title="Differs from shipped"></span>' : ''}
+              ${e.shipped ? `<button class="btn subtle revert" data-act="revert-entry" data-lexer="${esc(lx.id)}" data-theme="${esc(et.uuid)}" data-tt="${esc(tt)}" ${mod ? '' : 'disabled'} title="Revert this entry to shipped">↩</button>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+        ${et.origin === 'user' ? '<p class="hint" style="margin-top:6px">User theme — nothing shipped, so nothing to revert to. It never gets touched by lexer updates (new token types are auto-filled with Default). <span class="spec">[5b, 5f]</span></p>' : ''}
+
+        <div class="subhead">Palette — supplied <span class="spec">[4]</span></div>
+        <p class="hint" style="margin:0 0 4px">Shipped with the lexer and locked. Updates replace this section wholesale. Want a variant? Copy one into customs.</p>
+        ${Object.entries(lx.palette.supplied).map(([uuid, c]) => palRowHtml(lx.id, uuid, c, {
+          locked: true,
+          buttons: `<button class="btn subtle" data-act="col-copy" data-lexer="${esc(lx.id)}" data-uuid="${esc(uuid)}" title="Copy to custom section as an editable variant">copy ↓</button>`,
+        })).join('')}
+
+        <div class="subhead">Palette — custom <span class="spec">[13]</span></div>
+        ${Object.entries(lx.palette.custom).map(([uuid, c]) => palRowHtml(lx.id, uuid, c, {
+          rename: true,
+          buttons: `<button class="btn subtle danger" data-act="col-del" data-scope="${esc(lx.id)}" data-uuid="${esc(uuid)}" title="Delete (blocked while referenced)">delete</button>`,
+        })).join('') || '<p class="hint" style="margin:2px 0 6px">No custom colours for this lexer yet.</p>'}
+        <button class="btn" data-act="col-add" data-scope="${esc(lx.id)}">+ Add colour</button>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  document.getElementById('settings').innerHTML = html;
+}
+
+/* ---------------- render: preview ---------------- */
+function renderPreview() {
+  let html = '';
+  for (const lx of state.lexers) {
+    const t = themeByUuid(lx, lx.activeTheme);
+    html += `<div class="fence ${lx.enabled ? '' : 'off'}">
+      <div class="fhead"><span>\`\`\`${esc(lx.tags[0] || lx.id)}</span><span class="themetag">${esc(t ? t.name : '')}</span></div>
+      <pre>${lx.sample.map((line) => line.map(([text, type]) => {
+        let style = '';
+        if (lx.enabled && type && t) {
+          const e = t.entries[type];
+          const c = e ? (resolveColour(lx, e.current.colour) || state.global.supplied['default']) : state.global.supplied['default'];
+          style = `color:${c.hex};`;
+          if (e && e.current.bold) style += 'font-weight:700;';
+          if (e && e.current.italic) style += 'font-style:italic;';
+          if (e && e.current.underline) style += 'text-decoration:underline;';
+        }
+        return `<span style="${style}">${esc(text)}</span>`;
+      }).join('')).join('\n')}</pre>
+      ${lx.enabled ? '' : '<div class="offnote">lexer disabled — renders unhighlighted [10]</div>'}
+    </div>`;
+  }
+  document.getElementById('preview').innerHTML = html;
+}
+
+function renderAll() { renderSettings(); renderPreview(); }
+
+/* ---------------- update simulation ---------------- */
+const NASM_V3 = {
+  version: 3,
+  tokenTypes: ['instruction', 'register', 'number', 'label', 'directive', 'comment', 'macro'],
+  supplied: {
+    'Sky':   { hex: '#61afef' }, 'Rose':  { hex: '#e06c75' }, 'Amber': { hex: '#e5b567' },
+    'Mint':  { hex: '#98c379' }, 'Slate': { hex: '#7f848e' }, 'Cyan':  { hex: '#56b6c2' },
+  },
+  shipped: {
+    't-classic': {
+      instruction: { colour: 'Sky' }, register: { colour: 'Rose' }, number: { colour: 'Cyan' },
+      label: { colour: 'Amber' }, directive: { colour: 'Mint', bold: true },
+      comment: { colour: 'Slate', italic: true }, macro: { colour: 'Cyan', bold: true },
+    },
+    't-mid': {
+      instruction: { colour: 'Cyan', bold: true }, register: { colour: 'Sky' },
+      number: { colour: 'Mint' }, label: { colour: 'Amber' }, directive: { colour: 'Rose' },
+      comment: { colour: 'Slate', italic: true }, macro: { colour: 'Amber' },
+    },
+  },
+};
+
+function simulateUpdate() {
+  const lx = lexerById('alfred.nasm');
+  if (lx.version >= 3) { toast('NASM Assembly is already v3.', 'warn'); return; }
+
+  // 1. Replace supplied palette wholesale — uuids preserved by matching names [4]
+  const oldSupplied = lx.palette.supplied;
+  const nameToUuid = {};
+  for (const [uuid, c] of Object.entries(oldSupplied)) nameToUuid[c.name] = uuid;
+  const newSupplied = {};
+  const added = [], recoloured = [];
+  for (const [name, def] of Object.entries(NASM_V3.supplied)) {
+    let uuid = nameToUuid[name];
+    if (!uuid) { uuid = 'n-' + name.toLowerCase(); added.push(name); }
+    else if (oldSupplied[uuid].hex !== def.hex) recoloured.push(name);
+    newSupplied[uuid] = { name, hex: def.hex };
+  }
+  const dropped = Object.values(oldSupplied).map((c) => c.name).filter((n) => !(n in NASM_V3.supplied));
+  lx.palette.supplied = newSupplied;
+  const uuidFor = (name) => Object.entries(newSupplied).find(([, c]) => c.name === name)[0];
+
+  // 2. Merge themes [5b, 5e]
+  let kept = 0, advanced = 0;
+  for (const theme of lx.themes) {
+    if (theme.origin === 'shipped') {
+      const defs = NASM_V3.shipped[theme.uuid];
+      for (const tt of NASM_V3.tokenTypes) {
+        const d = defs[tt];
+        const newShipped = { colour: uuidFor(d.colour) };
+        if (d.bold) newShipped.bold = true;
+        if (d.italic) newShipped.italic = true;
+        if (d.underline) newShipped.underline = true;
+        const e = theme.entries[tt];
+        if (!e) { theme.entries[tt] = { shipped: clone(newShipped), current: clone(newShipped) }; continue; }
+        const untouched = eq(e.current, e.shipped);
+        e.shipped = clone(newShipped);
+        if (untouched) { e.current = clone(newShipped); advanced++; }
+        else kept++;
+      }
+    } else {
+      // user themes: only auto-fill new token types with Default [5b, 5f]
+      for (const tt of NASM_V3.tokenTypes) {
+        if (!theme.entries[tt]) theme.entries[tt] = { current: { colour: 'default' } };
+      }
+    }
+  }
+
+  lx.version = 3;
+  lx.tokenTypes = NASM_V3.tokenTypes;
+  lx.sample = NASM_SAMPLE_V3;
+
+  toast('NASM Assembly updated to v3.');
+  toast('New token type "macro" — auto-filled with Default in user themes. [5b]');
+  if (recoloured.length || added.length || dropped.length)
+    toast(`Supplied palette: ${recoloured.map((n) => n + ' recoloured').concat(added.map((n) => n + ' added'), dropped.map((n) => n + ' removed')).join(', ')}. [4]`, 'warn');
+  if (kept) toast(`${kept} edited entr${kept === 1 ? 'y' : 'ies'} kept your value — revert now targets v3. [5b]`, 'warn');
+  document.getElementById('updbtn').disabled = true;
+  renderAll();
+}
+
+/* ---------------- actions ---------------- */
+function handleAction(el) {
+  const act = el.dataset.act;
+  const lx = el.dataset.lexer ? lexerById(el.dataset.lexer) : null;
+
+  switch (act) {
+    case 'toggle-open': {
+      ui.open.has(lx.id) ? ui.open.delete(lx.id) : ui.open.add(lx.id);
+      renderSettings(); break;
+    }
+    case 'toggle-enabled': {
+      lx.enabled = el.checked; renderPreview(); break;
+    }
+    case 'remove-tag': {
+      lx.tags = lx.tags.filter((t) => t !== el.dataset.tag);
+      renderAll(); break;
+    }
+    case 'set-active': {
+      lx.activeTheme = el.dataset.theme;
+      ui.editing[lx.id] = el.dataset.theme;
+      renderAll(); break;
+    }
+    case 'sel-theme': {
+      ui.editing[lx.id] = el.dataset.theme;
+      renderSettings(); break;
+    }
+    case 'new-theme': {
+      const uuid = 'u' + (++ui.counter);
+      const entries = {};
+      for (const tt of lx.tokenTypes) entries[tt] = { current: { colour: 'default' } };
+      lx.themes.push({ uuid, name: 'My theme ' + ui.counter, origin: 'user', entries });
+      ui.editing[lx.id] = uuid;
+      toast('Theme created — born total, every type on Default. [5f, 5a]');
+      renderAll(); break;
+    }
+    case 'dup-theme': {
+      const src = themeByUuid(lx, el.dataset.theme);
+      const uuid = 'u' + (++ui.counter);
+      const entries = {};
+      for (const [tt, e] of Object.entries(src.entries)) entries[tt] = { current: clone(e.current) };
+      lx.themes.push({ uuid, name: src.name + ' (copy)', origin: 'user', entries });
+      ui.editing[lx.id] = uuid;
+      toast(`Duplicated "${src.name}" as a user theme — no shipped halves, so no revert. [5f]`);
+      renderAll(); break;
+    }
+    case 'del-theme': {
+      const t = themeByUuid(lx, el.dataset.theme);
+      lx.themes = lx.themes.filter((x) => x.uuid !== t.uuid);
+      if (lx.activeTheme === t.uuid) lx.activeTheme = lx.themes[0].uuid;
+      if (ui.editing[lx.id] === t.uuid) delete ui.editing[lx.id];
+      toast(`Deleted "${t.name}".`);
+      renderAll(); break;
+    }
+    case 'revert-theme': {
+      const t = themeByUuid(lx, el.dataset.theme);
+      for (const e of Object.values(t.entries)) if (e.shipped) e.current = clone(e.shipped);
+      toast(`"${t.name}" reverted to shipped. [5e]`);
+      renderAll(); break;
+    }
+    case 'revert-entry': {
+      const t = themeByUuid(lx, el.dataset.theme);
+      const e = t.entries[el.dataset.tt];
+      e.current = clone(e.shipped);
+      renderAll(); break;
+    }
+    case 'entry-flag': {
+      const t = themeByUuid(lx, el.dataset.theme);
+      const e = t.entries[el.dataset.tt];
+      e.current[el.dataset.flag] = !e.current[el.dataset.flag];
+      if (!e.current[el.dataset.flag]) delete e.current[el.dataset.flag];
+      renderAll(); break;
+    }
+    case 'col-copy': {
+      const src = lx.palette.supplied[el.dataset.uuid];
+      const uuid = 'c' + (++ui.counter);
+      lx.palette.custom[uuid] = { name: uniqueName(Object.assign({}, lx.palette.supplied, lx.palette.custom, state.global.supplied, state.global.custom), src.name + ' (copy)'), hex: src.hex };
+      toast(`Copied "${src.name}" into customs — this one is yours to edit. [13]`);
+      renderAll(); break;
+    }
+    case 'col-add': {
+      const scope = el.dataset.scope;
+      const pool = scope === 'global' ? state.global.custom : lexerById(scope).palette.custom;
+      const uuid = 'c' + (++ui.counter);
+      pool[uuid] = { name: uniqueName(pool, 'New colour'), hex: '#cccccc' };
+      renderAll(); break;
+    }
+    case 'col-del': {
+      const scope = el.dataset.scope;
+      const pool = scope === 'global' ? state.global.custom : lexerById(scope).palette.custom;
+      const uuid = el.dataset.uuid;
+      const refs = colourRefs(uuid);
+      if (refs.length) {
+        toast(`Can't delete "${pool[uuid].name}" — in use by: ${refs.join('; ')}. Unmap it first. [3a]`, 'err');
+        return;
+      }
+      delete pool[uuid];
+      renderAll(); break;
+    }
+    case 'revert-default': {
+      state.global.supplied['default'].hex = BUILTIN_DEFAULT_HEX;
+      toast('Default colour back to built-in. [4a]');
+      renderAll(); break;
+    }
+    case 'sim-update': simulateUpdate(); break;
+    case 'reset-demo': {
+      state = makeInitialState();
+      ui.editing = {};
+      document.getElementById('updbtn').disabled = false;
+      toast('Demo reset.');
+      renderAll(); break;
+    }
+  }
+}
+
+function handleChange(el) {
+  const act = el.dataset.act;
+  const lx = el.dataset.lexer ? lexerById(el.dataset.lexer) : null;
+  switch (act) {
+    case 'entry-colour': {
+      const t = themeByUuid(lx, el.dataset.theme);
+      t.entries[el.dataset.tt].current.colour = el.value;
+      renderAll(); break;
+    }
+    case 'rename-theme': {
+      themeByUuid(lx, el.dataset.theme).name = el.value.trim() || 'Unnamed';
+      renderAll(); break;
+    }
+    case 'col-rename': {
+      const scope = el.dataset.scope;
+      const pool = scope === 'global' ? state.global.custom : lexerById(scope).palette.custom;
+      const all = scope === 'global'
+        ? Object.assign({}, state.global.supplied, state.global.custom)
+        : Object.assign({}, lexerById(scope).palette.supplied, lexerById(scope).palette.custom);
+      const wanted = el.value.trim();
+      const clash = Object.entries(all).find(([u, c]) => u !== el.dataset.uuid && c.name === wanted);
+      if (!wanted || clash) {
+        toast(clash ? `Name "${wanted}" is taken in this palette. [6c]` : 'Name cannot be empty.', 'err');
+        renderSettings(); return;
+      }
+      pool[el.dataset.uuid].name = wanted;
+      renderAll(); break;
+    }
+    case 'add-tag': {
+      const tag = el.value.trim();
+      if (!tag) return;
+      if (/\s/.test(tag)) { toast('A fence tag is a single word.', 'err'); return; }
+      const owner = state.lexers.find((l) => l.tags.includes(tag));
+      if (owner === lx) { el.value = ''; return; }
+      if (owner) { toast(`Tag "${tag}" is bound to ${owner.name} — each tag resolves to exactly one lexer. [0b, 0c]`, 'err'); return; }
+      lx.tags.push(tag);
+      el.value = '';
+      renderAll(); break;
+    }
+    // live edits happen on input; the commit re-render syncs revert buttons etc.
+    case 'col-hex': case 'default-hex': renderAll(); break;
+  }
+}
+
+function handleColorInput(el) {
+  const act = el.dataset.act;
+  if (act === 'default-hex') {
+    state.global.supplied['default'].hex = el.value;
+  } else if (act === 'col-hex') {
+    const scope = el.dataset.scope;
+    const pool = scope === 'global' ? state.global.custom : lexerById(scope).palette.custom;
+    pool[el.dataset.uuid].hex = el.value;
+  } else return;
+  renderPreview();
+  // update the hex label + revert button appear without a full re-render (keeps the picker open)
+  const label = el.closest('.palrow')?.querySelector('.hex');
+  if (label) label.textContent = el.value;
+}
+
+/* ---------------- wiring ---------------- */
+document.addEventListener('click', (ev) => {
+  const el = ev.target.closest('[data-act]');
+  if (!el) return;
+  // selects and text/color inputs act on 'change'/'input', not click
+  if (el.tagName === 'SELECT' || (el.tagName === 'INPUT' && el.type !== 'checkbox' && el.type !== 'radio')) return;
+  // container rows (theme row, lexer header) only fire when the click wasn't on a control inside them
+  if (el.dataset.act === 'sel-theme' || el.dataset.act === 'toggle-open') {
+    if (ev.target.closest('[data-stop]')) return;
+  }
+  handleAction(el);
+});
+document.addEventListener('keydown', (ev) => {
+  const el = ev.target.closest('[data-act]');
+  if (!el) return;
+  if (el.dataset.act === 'add-tag' && ev.key === 'Enter') { handleChange(el); return; }
+  if ((el.dataset.act === 'toggle-open') && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); handleAction(el); }
+});
+document.addEventListener('change', (ev) => {
+  const el = ev.target.closest('[data-act]');
+  if (!el) return;
+  if (el.dataset.act === 'toggle-enabled' || el.dataset.act === 'set-active') return; // handled on click
+  handleChange(el);
+});
+document.addEventListener('input', (ev) => {
+  const el = ev.target.closest('[data-act]');
+  if (el && el.type === 'color') handleColorInput(el);
+});
+
+renderAll();
+</script>

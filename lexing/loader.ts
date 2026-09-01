@@ -3,9 +3,6 @@ import { Lexer, PaletteColour } from "./api";
 // vault-relative folder (inside the plugin dir) that holds user-imported lexers
 export const IMPORTED_LEXERS_DIR = "imported_lexers";
 
-// path is the lexer's folder inside imported_lexers/
-export type FileLexer = { lexer: Lexer, palette: PaletteColour[], path: string };
-
 // every lexer folder's entry module and palette file
 export const LEXER_ENTRY = "index.js";
 export function paletteFilePath(lexerFolder: string): string {

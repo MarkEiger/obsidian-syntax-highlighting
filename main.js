@@ -24,13 +24,10 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // main.ts
 var main_exports = {};
 __export(main_exports, {
-  default: () => LetterAPlugin,
-  refreshHighlight: () => refreshHighlight
+  default: () => LetterAPlugin
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian6 = require("obsidian");
-var import_state = require("@codemirror/state");
-var import_view = require("@codemirror/view");
 
 // settings/settings.ts
 var import_obsidian5 = require("obsidian");
@@ -370,6 +367,35 @@ function reconcileLexerSettings(settings, lexer, palette) {
     }
   }
 }
+function attachLexers(loaded, lexersSettings, notify) {
+  var _a, _b, _c;
+  const before = JSON.stringify(lexersSettings);
+  const attached = [];
+  const seenIds = /* @__PURE__ */ new Set();
+  for (const entry of loaded) {
+    const { lexer, palette } = entry;
+    if (seenIds.has(lexer.id)) {
+      console.warn(`[lexer ${lexer.id}] duplicate lexer id \u2014 skipping ${(_a = entry.origin) != null ? _a : "(built-in)"}`);
+      notify(`Lexer id "${lexer.id}" is already in use \u2014 skipping ${(_b = entry.origin) != null ? _b : "a duplicate"}.`);
+      continue;
+    }
+    seenIds.add(lexer.id);
+    for (const warning of validateLexer(lexer, palette)) {
+      console.warn(`[lexer ${lexer.id}] ${warning}`);
+    }
+    const existing = Object.entries(lexersSettings).find(([, ls]) => ls.lexerId === lexer.id);
+    const uuid = (_c = existing == null ? void 0 : existing[0]) != null ? _c : crypto.randomUUID();
+    let settings = existing == null ? void 0 : existing[1];
+    if (settings) {
+      reconcileLexerSettings(settings, lexer, palette);
+    } else {
+      settings = seedLexerSettings(lexer, palette);
+    }
+    lexersSettings[uuid] = settings;
+    attached.push({ ...entry, uuid });
+  }
+  return { attached, changed: JSON.stringify(lexersSettings) !== before };
+}
 function restoreLexerDefaults(settings, lexer, palette, keepCustomColours) {
   for (const colour of settings.privatePool) {
     if (colour.isCustom)
@@ -662,7 +688,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           new import_obsidian4.Notice(`${e instanceof Error ? e.message : e}`);
           return;
         }
-        const clash = Object.values(plugin.lexersByUuid).some((l) => l.id === imported.id);
+        const clash = Object.values(plugin.registry.byUuid).some((l) => l.id === imported.id);
         if (clash) {
           new import_obsidian4.Notice(`Lexer id "${imported.id}" is already installed \u2014 use its Update option instead.`);
           return;
@@ -692,7 +718,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
       new import_obsidian4.Notice("Lexers reloaded");
     }));
     for (const [uuid, lexerSettings] of Object.entries(plugin.settings.lexersSettings)) {
-      const lexer = plugin.lexersByUuid[uuid];
+      const lexer = plugin.registry.byUuid[uuid];
       if (!lexer)
         continue;
       const lexerDiv = containerEl.createDiv();
@@ -703,30 +729,16 @@ var LexerSettingsTab = class extends BaseSettingsTab {
         }
         text.setValue(lexerSettings.extention);
         const commit = async () => {
-          var _a;
           const value = text.getValue().trim();
           const prev = lexerSettings.extention;
           if (value === prev)
             return;
-          const reject = (reason) => {
+          const reason = plugin.registry.retargetLexer(plugin.settings.lexersSettings, uuid, value);
+          if (reason) {
             new import_obsidian4.Notice(reason);
             text.setValue(prev);
-          };
-          if (!value)
-            return reject("Extension cannot be empty.");
-          if (/\s/.test(value))
-            return reject("Extension must be a single word.");
-          const clash = Object.entries(plugin.settings.lexersSettings).find(([otherUuid, ls]) => otherUuid !== uuid && ls.extention === value);
-          if (clash) {
-            const clashLexer = plugin.lexersByUuid[clash[0]];
-            const clashName = clashLexer ? `"${clashLexer.name}"` : `id "${clash[1].lexerId}" (not loaded)`;
-            return reject(`Extension "${value}" is already targeted by ${clashName}.`);
+            return;
           }
-          if (((_a = plugin.lexers[prev]) == null ? void 0 : _a.uuid) === uuid) {
-            delete plugin.lexers[prev];
-          }
-          lexerSettings.extention = value;
-          plugin.lexers[value] = { lexer, uuid };
           await plugin.saveSettings();
         };
         text.inputEl.addEventListener("blur", () => {
@@ -749,7 +761,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           menu.addItem((item) => item.setTitle("Restore default colours").setIcon("rotate-ccw").onClick(() => {
             new RestoreDefaultsModal(plugin.app, lexer.name, async (keepCustomColours) => {
               var _a;
-              restoreLexerDefaults(lexerSettings, lexer, (_a = plugin.lexerPalettes[uuid]) != null ? _a : [], keepCustomColours);
+              restoreLexerDefaults(lexerSettings, lexer, (_a = plugin.registry.palettes[uuid]) != null ? _a : [], keepCustomColours);
               await plugin.saveSettings();
               this.refresh();
             }).open();
@@ -757,7 +769,7 @@ var LexerSettingsTab = class extends BaseSettingsTab {
           menu.addItem((item) => item.setTitle("View private palette").setIcon("palette").onClick(() => {
             new PrivatePaletteModal(plugin, lexerSettings, lexer.name, () => this.refresh()).open();
           }));
-          const sourcePath = plugin.lexerSourcePaths[uuid];
+          const sourcePath = plugin.registry.origins[uuid];
           if (sourcePath) {
             menu.addItem((item) => item.setTitle("Update lexer").setIcon("upload").onClick(() => {
               pickLexerFolder(async (files) => {
@@ -936,24 +948,308 @@ var DEFAULT_SETTINGS = {
 // lexing/api.ts
 var lexers = [];
 
+// lexing/source.ts
+var BuiltinLexerSource = class {
+  async load() {
+    return lexers.map(({ lexer, palette }) => ({ lexer, palette }));
+  }
+};
+var FileLexerSource = class {
+  constructor(adapter, dir, notify) {
+    this.adapter = adapter;
+    this.dir = dir;
+    this.notify = notify;
+  }
+  // all .js files under a lexer's folder, keyed by folder-relative path
+  // ('index.js', 'lib/tables.js') — the module map require() resolves in
+  async collectModules(folder, root, out) {
+    const listing = await this.adapter.list(folder);
+    for (const file of listing.files) {
+      if (!file.endsWith(".js"))
+        continue;
+      out[file.slice(root.length + 1)] = await this.adapter.read(file);
+    }
+    for (const sub of listing.folders) {
+      await this.collectModules(sub, root, out);
+    }
+  }
+  async load() {
+    if (!await this.adapter.exists(this.dir)) {
+      await this.adapter.mkdir(this.dir);
+    }
+    await this.adapter.write(`${this.dir}/lexer-api.d.ts`, LEXER_API_DTS);
+    const listing = await this.adapter.list(this.dir);
+    for (const stray of listing.files.filter((f) => f.endsWith(".js"))) {
+      console.warn(`[lexer file] flat lexer files are no longer supported \u2014 move "${stray}" into its own folder as ${LEXER_ENTRY}`);
+      this.notify(`"${stray.split("/").pop()}" is a flat lexer file \u2014 move it into its own folder as ${LEXER_ENTRY}.`);
+    }
+    const loaded = [];
+    for (const folder of listing.folders) {
+      try {
+        const modules = {};
+        await this.collectModules(folder, folder, modules);
+        if (!(LEXER_ENTRY in modules)) {
+          if (Object.keys(modules).length) {
+            this.notify(`Lexer folder "${folder.split("/").pop()}" has no ${LEXER_ENTRY} \u2014 skipped.`);
+          }
+          continue;
+        }
+        const lexer = evaluateLexerModules(modules, LEXER_ENTRY, folder);
+        let palette = [];
+        const palettePath = paletteFilePath(folder);
+        if (await this.adapter.exists(palettePath)) {
+          try {
+            palette = parsePaletteSource(await this.adapter.read(palettePath), palettePath);
+          } catch (e) {
+            console.warn("[lexer palette]", e);
+            this.notify(`Failed to load palette: ${e instanceof Error ? e.message : e}`);
+          }
+        }
+        loaded.push({ lexer, palette, origin: folder });
+      } catch (e) {
+        console.warn("[lexer file]", e);
+        this.notify(`Failed to load lexer: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    return loaded;
+  }
+};
+
+// lexing/registry.ts
+var LexerRegistry = class {
+  constructor() {
+    this.byExtension = {};
+    // render path
+    this.byUuid = {};
+    // settings path
+    // the palette each lexer shipped with, keyed by settings uuid — needed
+    // again when the user restores the lexer's default colours
+    this.palettes = {};
+    // source folder of each imported lexer, keyed by settings uuid
+    // (built-ins absent; presence = updatable in place)
+    this.origins = {};
+  }
+  rebuild(attached, lexersSettings, notify) {
+    this.byExtension = {};
+    this.byUuid = {};
+    this.palettes = {};
+    this.origins = {};
+    for (const { lexer, palette, origin, uuid } of attached) {
+      const extension = lexersSettings[uuid].extention;
+      const occupant = this.byExtension[extension];
+      if (occupant) {
+        console.warn(`[lexer ${lexer.id}] extension "${extension}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive`);
+        notify(`Extension "${extension}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive until re-targeted in settings.`);
+      } else {
+        this.byExtension[extension] = { lexer, uuid };
+      }
+      this.byUuid[uuid] = lexer;
+      this.palettes[uuid] = palette;
+      if (origin) {
+        this.origins[uuid] = origin;
+      }
+    }
+  }
+  // Re-target a lexer's code-block extension. Validates and claims the new
+  // slot; returns a user-facing reason on rejection (nothing changed), or
+  // null on success (caller persists). Checks stored settings, not just
+  // loaded lexers — a clash with an unloaded lexer would resurface on load.
+  retargetLexer(lexersSettings, uuid, to) {
+    var _a;
+    if (!to)
+      return "Extension cannot be empty.";
+    if (/\s/.test(to))
+      return "Extension must be a single word.";
+    const clash = Object.entries(lexersSettings).find(([otherUuid, ls]) => otherUuid !== uuid && ls.extention === to);
+    if (clash) {
+      const clashLexer = this.byUuid[clash[0]];
+      const clashName = clashLexer ? `"${clashLexer.name}"` : `id "${clash[1].lexerId}" (not loaded)`;
+      return `Extension "${to}" is already targeted by ${clashName}.`;
+    }
+    const prev = lexersSettings[uuid].extention;
+    if (((_a = this.byExtension[prev]) == null ? void 0 : _a.uuid) === uuid) {
+      delete this.byExtension[prev];
+    }
+    lexersSettings[uuid].extention = to;
+    const lexer = this.byUuid[uuid];
+    if (lexer) {
+      this.byExtension[to] = { lexer, uuid };
+    }
+    return null;
+  }
+};
+
+// editor/highlighter.ts
+var import_state = require("@codemirror/state");
+var import_view = require("@codemirror/view");
+var refreshHighlight = import_state.StateEffect.define();
+function highlightExtension(source) {
+  const markCache = /* @__PURE__ */ new Map();
+  const markFor = (colour) => {
+    let mark = markCache.get(colour);
+    if (!mark) {
+      mark = import_view.Decoration.mark({
+        attributes: { style: `color: ${colour}; font-weight: bold` }
+        // todo:maybe give controll to lexer
+      });
+      markCache.set(colour, mark);
+    }
+    return mark;
+  };
+  const scanBlocks = (state, start) => {
+    const text = state.sliceDoc(start);
+    const code_block_regex = new RegExp(`(^\`\`\`([^
+]*)
+)([\\s\\S]*?)(^\`\`\`[ 	]*$)`, "gm");
+    const blocks = [];
+    let match;
+    while ((match = code_block_regex.exec(text)) !== null) {
+      const HEADER_ID = 1;
+      const EXTENTION_ID = 2;
+      const BLOCK_TEXT_ID = 3;
+      const FOOTER_ID = 4;
+      const from = start + match.index;
+      const contentFrom = from + match[HEADER_ID].length;
+      const contentTo = contentFrom + match[BLOCK_TEXT_ID].length;
+      blocks.push({
+        from,
+        contentFrom,
+        contentTo,
+        to: contentTo + match[FOOTER_ID].length,
+        extension: match[EXTENTION_ID].trim().split(/\s+/)[0]
+      });
+    }
+    return blocks;
+  };
+  const tokenizeBlock = (state, block) => {
+    if (!block.extension)
+      return [];
+    const highlighter = source(block.extension);
+    if (!highlighter)
+      return [];
+    const content = state.sliceDoc(block.contentFrom, block.contentTo);
+    let tokens;
+    try {
+      tokens = highlighter.tokenize(content);
+    } catch (e) {
+      console.warn(`[lexer ${highlighter.id}] tokenize threw:`, e);
+      return [];
+    }
+    const ranges = [];
+    let last_index = 0;
+    for (const token of tokens) {
+      if (!token || typeof token.text !== "string" || typeof token.type !== "string") {
+        console.warn(`[lexer ${highlighter.id}] skipping malformed token`, token);
+        continue;
+      }
+      const token_index = content.indexOf(token.text, last_index);
+      if (token_index === -1) {
+        console.warn(`[lexer ${highlighter.id}] token text not found in block:`, token.text);
+        continue;
+      }
+      const matchPos = block.contentFrom + token_index;
+      const colour = highlighter.colourFor(token.type);
+      if (colour) {
+        ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
+      }
+      last_index = token_index + token.text.length;
+    }
+    return ranges;
+  };
+  return import_view.ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.decorations = import_view.Decoration.none;
+        this.blocks = [];
+        this.rebuildFrom(view.state, 0);
+      }
+      update(update) {
+        if (update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshHighlight)))) {
+          this.rebuildFrom(update.state, 0);
+          return;
+        }
+        if (!update.docChanged)
+          return;
+        this.decorations = this.decorations.map(update.changes);
+        this.blocks = this.blocks.map((b) => ({
+          from: update.changes.mapPos(b.from, -1),
+          contentFrom: update.changes.mapPos(b.contentFrom, -1),
+          contentTo: update.changes.mapPos(b.contentTo, 1),
+          to: update.changes.mapPos(b.to, 1),
+          extension: b.extension
+        }));
+        let earliest = Infinity;
+        let fenceInvolved = false;
+        const changed = [];
+        update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+          changed.push({ fromB, toB });
+          earliest = Math.min(earliest, fromB);
+          if (!fenceInvolved) {
+            const oldDoc = update.startState.doc;
+            const newDoc = update.state.doc;
+            const oldLines = oldDoc.sliceString(oldDoc.lineAt(fromA).from, oldDoc.lineAt(toA).to);
+            const newLines = newDoc.sliceString(newDoc.lineAt(fromB).from, newDoc.lineAt(toB).to);
+            fenceInvolved = oldLines.includes("```") || newLines.includes("```");
+          }
+        });
+        if (fenceInvolved) {
+          let rescanStart = 0;
+          for (const b of this.blocks) {
+            if (b.to < earliest)
+              rescanStart = Math.max(rescanStart, b.to);
+          }
+          this.rebuildFrom(update.state, rescanStart);
+          return;
+        }
+        for (const block of this.blocks) {
+          if (!changed.some((r) => r.fromB <= block.contentTo && r.toB >= block.contentFrom))
+            continue;
+          this.decorations = this.decorations.update({
+            filterFrom: block.contentFrom,
+            filterTo: block.contentTo,
+            filter: () => false,
+            add: tokenizeBlock(update.state, block)
+          });
+        }
+      }
+      // drop all structure and decorations from `start` onward and
+      // rebuild them by rescanning; `start` must not be inside a block
+      rebuildFrom(state, start) {
+        this.blocks = this.blocks.filter((b) => b.to <= start);
+        const rescanned = scanBlocks(state, start);
+        const add = [];
+        for (const block of rescanned) {
+          for (const range of tokenizeBlock(state, block)) {
+            add.push(range);
+          }
+          this.blocks.push(block);
+        }
+        this.decorations = this.decorations.update({
+          filterFrom: start,
+          filterTo: state.doc.length,
+          filter: () => false,
+          add
+        });
+      }
+    },
+    {
+      decorations: (v) => v.decorations
+    }
+  );
+}
+
 // lexing/lexers/index.ts
 var lexers_exports = {};
 
 // main.ts
-var refreshHighlight = import_state.StateEffect.define();
 var LetterAPlugin = class extends import_obsidian6.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
-    this.lexers = {};
-    // keyed by code-block extension (render path)
-    this.lexersByUuid = {};
-    // keyed by settings uuid (settings path)
-    // the palette each lexer shipped with, keyed by settings uuid — needed
-    // again when the user restores the lexer's default colours
-    this.lexerPalettes = {};
-    // source folder of each imported lexer, keyed by settings uuid (built-ins absent)
-    this.lexerSourcePaths = {};
+    // where lexers come from; a future source kind (e.g. shop-installed)
+    // gets appended here and everything downstream picks it up
+    this.sources = [];
+    this.registry = new LexerRegistry();
     // transient (not persisted) — which settings sections are expanded, so a
     // re-render of the settings pane preserves the user's open/closed sections
     this.expandedSections = /* @__PURE__ */ new Set();
@@ -962,8 +1258,12 @@ var LetterAPlugin = class extends import_obsidian6.Plugin {
   }
   async onload() {
     await this.loadSettings();
+    this.sources = [
+      new BuiltinLexerSource(),
+      new FileLexerSource(this.app.vault.adapter, this.importedLexersDir(), (msg) => new import_obsidian6.Notice(msg))
+    ];
     await this.loadLexers();
-    this.registerEditorExtension(this.buildEditorExtension());
+    this.registerEditorExtension(highlightExtension((ext) => this.highlighterFor(ext)));
     this.addSettingTab(new LetterASettingTab(this.app, this));
     this.addCommand({
       id: "reload-lexers",
@@ -977,116 +1277,40 @@ var LetterAPlugin = class extends import_obsidian6.Plugin {
   importedLexersDir() {
     return `${this.manifest.dir}/${IMPORTED_LEXERS_DIR}`;
   }
-  // all .js files under a lexer's folder, keyed by folder-relative path
-  // ('index.js', 'lib/tables.js') — the module map require() resolves in
-  async collectLexerModules(folder, root, out) {
-    const adapter = this.app.vault.adapter;
-    const listing = await adapter.list(folder);
-    for (const file of listing.files) {
-      if (!file.endsWith(".js"))
-        continue;
-      out[file.slice(root.length + 1)] = await adapter.read(file);
-    }
-    for (const sub of listing.folders) {
-      await this.collectLexerModules(sub, root, out);
-    }
-  }
-  // Scan imported_lexers/: every lexer is a FOLDER with an index.js entry,
-  // optional sibling modules (require'able), and a palette.json. A lexer
-  // that fails to load is skipped with a notice and its stored settings
-  // stay untouched until it loads again.
-  async scanFileLexers() {
-    const adapter = this.app.vault.adapter;
-    const dir = this.importedLexersDir();
-    if (!await adapter.exists(dir)) {
-      await adapter.mkdir(dir);
-    }
-    await adapter.write(`${dir}/lexer-api.d.ts`, LEXER_API_DTS);
-    const listing = await adapter.list(dir);
-    for (const stray of listing.files.filter((f) => f.endsWith(".js"))) {
-      console.warn(`[lexer file] flat lexer files are no longer supported \u2014 move "${stray}" into its own folder as ${LEXER_ENTRY}`);
-      new import_obsidian6.Notice(`"${stray.split("/").pop()}" is a flat lexer file \u2014 move it into its own folder as ${LEXER_ENTRY}.`);
-    }
-    const fileLexers = [];
-    for (const folder of listing.folders) {
-      try {
-        const modules = {};
-        await this.collectLexerModules(folder, folder, modules);
-        if (!(LEXER_ENTRY in modules)) {
-          if (Object.keys(modules).length) {
-            new import_obsidian6.Notice(`Lexer folder "${folder.split("/").pop()}" has no ${LEXER_ENTRY} \u2014 skipped.`);
-          }
-          continue;
-        }
-        const lexer = evaluateLexerModules(modules, LEXER_ENTRY, folder);
-        let palette = [];
-        const palettePath = paletteFilePath(folder);
-        if (await adapter.exists(palettePath)) {
-          try {
-            palette = parsePaletteSource(await adapter.read(palettePath), palettePath);
-          } catch (e) {
-            console.warn("[lexer palette]", e);
-            new import_obsidian6.Notice(`Failed to load palette: ${e instanceof Error ? e.message : e}`);
-          }
-        }
-        fileLexers.push({ lexer, palette, path: folder });
-      } catch (e) {
-        console.warn("[lexer file]", e);
-        new import_obsidian6.Notice(`Failed to load lexer: ${e instanceof Error ? e.message : e}`);
-      }
-    }
-    return fileLexers;
-  }
+  // gather every source's lexers, bind them to stored settings, and
+  // rebuild the registry's lookups
   async loadLexers() {
-    var _a;
-    this.lexers = {};
-    this.lexersByUuid = {};
-    this.lexerSourcePaths = {};
-    this.lexerPalettes = {};
-    const seenIds = /* @__PURE__ */ new Set();
-    const fileLexers = await this.scanFileLexers();
-    const allLexers = [
-      ...lexers,
-      ...fileLexers
-    ];
-    const before = JSON.stringify(this.settings.lexersSettings);
-    for (const { lexer, palette, path } of allLexers) {
-      if (seenIds.has(lexer.id)) {
-        console.warn(`[lexer ${lexer.id}] duplicate lexer id \u2014 skipping ${path != null ? path : "(built-in)"}`);
-        new import_obsidian6.Notice(`Lexer id "${lexer.id}" is already in use \u2014 skipping ${path != null ? path : "a duplicate"}.`);
-        continue;
-      }
-      seenIds.add(lexer.id);
-      for (const warning of validateLexer(lexer, palette)) {
-        console.warn(`[lexer ${lexer.id}] ${warning}`);
-      }
-      const existing = Object.entries(this.settings.lexersSettings).find(([, ls]) => ls.lexerId === lexer.id);
-      const uuid = (_a = existing == null ? void 0 : existing[0]) != null ? _a : crypto.randomUUID();
-      let lexerSettings = existing == null ? void 0 : existing[1];
-      if (lexerSettings) {
-        reconcileLexerSettings(lexerSettings, lexer, palette);
-      } else {
-        lexerSettings = seedLexerSettings(lexer, palette);
-      }
-      this.settings.lexersSettings[uuid] = lexerSettings;
-      const occupant = this.lexers[lexerSettings.extention];
-      if (occupant) {
-        console.warn(`[lexer ${lexer.id}] extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive`);
-        new import_obsidian6.Notice(`Extension "${lexerSettings.extention}" is already targeted by "${occupant.lexer.name}" \u2014 "${lexer.name}" is inactive until re-targeted in settings.`);
-      } else {
-        this.lexers[lexerSettings.extention] = { lexer, uuid };
-      }
-      this.lexersByUuid[uuid] = lexer;
-      this.lexerPalettes[uuid] = palette;
-      if (path) {
-        this.lexerSourcePaths[uuid] = path;
-      }
+    const notify = (msg) => new import_obsidian6.Notice(msg);
+    const loaded = [];
+    for (const source of this.sources) {
+      loaded.push(...await source.load());
     }
-    if (JSON.stringify(this.settings.lexersSettings) !== before) {
+    const { attached, changed } = attachLexers(loaded, this.settings.lexersSettings, notify);
+    this.registry.rebuild(attached, this.settings.lexersSettings, notify);
+    if (changed) {
       await this.saveSettings();
     } else {
       this.refreshEditors();
     }
+  }
+  // the render path's view of a registered lexer: the editor extension asks
+  // per extension and gets tokens + resolved colours, or null when nothing
+  // should colour it (no lexer registered, or disabled in settings)
+  highlighterFor(extension) {
+    const registered = this.registry.byExtension[extension];
+    if (!registered)
+      return null;
+    const lexerSettings = this.settings.lexersSettings[registered.uuid];
+    if (!(lexerSettings == null ? void 0 : lexerSettings.enabled))
+      return null;
+    return {
+      id: registered.lexer.id,
+      tokenize: (input) => registered.lexer.tokenize(input),
+      colourFor: (tokenType) => {
+        var _a, _b;
+        return (_b = (_a = this.resolveColour(lexerSettings, lexerSettings.colourMappings[tokenType])) == null ? void 0 : _a.value) != null ? _b : null;
+      }
+    };
   }
   // resolve a token mapping's colour id against the global palette and the
   // owning lexer's private pool (scope is derived, not stored)
@@ -1128,164 +1352,5 @@ var LetterAPlugin = class extends import_obsidian6.Plugin {
       const cm = (_a = view.editor) == null ? void 0 : _a.cm;
       cm == null ? void 0 : cm.dispatch({ effects: refreshHighlight.of(null) });
     });
-  }
-  buildEditorExtension() {
-    const plugin = this;
-    const markCache = /* @__PURE__ */ new Map();
-    const markFor = (colour) => {
-      let mark = markCache.get(colour.value);
-      if (!mark) {
-        mark = import_view.Decoration.mark({
-          attributes: { style: `color: ${colour.value}; font-weight: bold` }
-          // todo:maybe give controll to lexer
-        });
-        markCache.set(colour.value, mark);
-      }
-      return mark;
-    };
-    const scanBlocks = (state, start) => {
-      const text = state.sliceDoc(start);
-      const code_block_regex = new RegExp(`(^\`\`\`([^
-]*)
-)([\\s\\S]*?)(^\`\`\`[ 	]*$)`, "gm");
-      const blocks = [];
-      let match;
-      while ((match = code_block_regex.exec(text)) !== null) {
-        const HEADER_ID = 1;
-        const EXTENTION_ID = 2;
-        const BLOCK_TEXT_ID = 3;
-        const FOOTER_ID = 4;
-        const from = start + match.index;
-        const contentFrom = from + match[HEADER_ID].length;
-        const contentTo = contentFrom + match[BLOCK_TEXT_ID].length;
-        blocks.push({
-          from,
-          contentFrom,
-          contentTo,
-          to: contentTo + match[FOOTER_ID].length,
-          extension: match[EXTENTION_ID].trim().split(/\s+/)[0]
-        });
-      }
-      return blocks;
-    };
-    const tokenizeBlock = (state, block) => {
-      if (!block.extension)
-        return [];
-      const registered = plugin.lexers[block.extension];
-      if (!registered)
-        return [];
-      const lexerSettings = plugin.settings.lexersSettings[registered.uuid];
-      if (!lexerSettings.enabled)
-        return [];
-      const lexer = registered.lexer;
-      const content = state.sliceDoc(block.contentFrom, block.contentTo);
-      let tokens;
-      try {
-        tokens = lexer.tokenize(content);
-      } catch (e) {
-        console.warn(`[lexer ${lexer.id}] tokenize threw:`, e);
-        return [];
-      }
-      const ranges = [];
-      let last_index = 0;
-      for (const token of tokens) {
-        if (!token || typeof token.text !== "string" || typeof token.type !== "string") {
-          console.warn(`[lexer ${lexer.id}] skipping malformed token`, token);
-          continue;
-        }
-        const token_index = content.indexOf(token.text, last_index);
-        if (token_index === -1) {
-          console.warn(`[lexer ${lexer.id}] token text not found in block:`, token.text);
-          continue;
-        }
-        const matchPos = block.contentFrom + token_index;
-        const colour = plugin.resolveColour(lexerSettings, lexerSettings.colourMappings[token.type]);
-        if (colour) {
-          ranges.push(markFor(colour).range(matchPos, matchPos + token.text.length));
-        }
-        last_index = token_index + token.text.length;
-      }
-      return ranges;
-    };
-    return import_view.ViewPlugin.fromClass(
-      class {
-        constructor(view) {
-          this.decorations = import_view.Decoration.none;
-          this.blocks = [];
-          this.rebuildFrom(view.state, 0);
-        }
-        update(update) {
-          if (update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshHighlight)))) {
-            this.rebuildFrom(update.state, 0);
-            return;
-          }
-          if (!update.docChanged)
-            return;
-          this.decorations = this.decorations.map(update.changes);
-          this.blocks = this.blocks.map((b) => ({
-            from: update.changes.mapPos(b.from, -1),
-            contentFrom: update.changes.mapPos(b.contentFrom, -1),
-            contentTo: update.changes.mapPos(b.contentTo, 1),
-            to: update.changes.mapPos(b.to, 1),
-            extension: b.extension
-          }));
-          let earliest = Infinity;
-          let fenceInvolved = false;
-          const changed = [];
-          update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
-            changed.push({ fromB, toB });
-            earliest = Math.min(earliest, fromB);
-            if (!fenceInvolved) {
-              const oldDoc = update.startState.doc;
-              const newDoc = update.state.doc;
-              const oldLines = oldDoc.sliceString(oldDoc.lineAt(fromA).from, oldDoc.lineAt(toA).to);
-              const newLines = newDoc.sliceString(newDoc.lineAt(fromB).from, newDoc.lineAt(toB).to);
-              fenceInvolved = oldLines.includes("```") || newLines.includes("```");
-            }
-          });
-          if (fenceInvolved) {
-            let rescanStart = 0;
-            for (const b of this.blocks) {
-              if (b.to < earliest)
-                rescanStart = Math.max(rescanStart, b.to);
-            }
-            this.rebuildFrom(update.state, rescanStart);
-            return;
-          }
-          for (const block of this.blocks) {
-            if (!changed.some((r) => r.fromB <= block.contentTo && r.toB >= block.contentFrom))
-              continue;
-            this.decorations = this.decorations.update({
-              filterFrom: block.contentFrom,
-              filterTo: block.contentTo,
-              filter: () => false,
-              add: tokenizeBlock(update.state, block)
-            });
-          }
-        }
-        // drop all structure and decorations from `start` onward and
-        // rebuild them by rescanning; `start` must not be inside a block
-        rebuildFrom(state, start) {
-          this.blocks = this.blocks.filter((b) => b.to <= start);
-          const rescanned = scanBlocks(state, start);
-          const add = [];
-          for (const block of rescanned) {
-            for (const range of tokenizeBlock(state, block)) {
-              add.push(range);
-            }
-            this.blocks.push(block);
-          }
-          this.decorations = this.decorations.update({
-            filterFrom: start,
-            filterTo: state.doc.length,
-            filter: () => false,
-            add
-          });
-        }
-      },
-      {
-        decorations: (v) => v.decorations
-      }
-    );
   }
 };

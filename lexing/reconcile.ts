@@ -1,5 +1,6 @@
 import { Colour, ColourMapping, LexerSettings, newColourId } from "settings/settings";
 import { Lexer, PaletteColour } from "./api";
+import { LoadedLexer } from "./source";
 
 // Sanity-checks a lexer's declaration against the palette it ships with.
 // Returns human-readable warnings; the lexer still loads best-effort
@@ -74,6 +75,51 @@ export function reconcileLexerSettings(settings: LexerSettings, lexer: Lexer, pa
 			settings.colourMappings[tokenType] = colourId;
 		}
 	}
+}
+
+// a loaded lexer bound to its settings key
+export type AttachedLexer = LoadedLexer & { uuid: string };
+
+// Attach every loaded lexer to its stored settings: settings re-attach by the
+// lexer's declared id; the uuid (the settings key) is minted once and survives
+// lexer updates. Mutates lexersSettings in place. `changed` reports whether
+// reconciliation altered anything — it gates persistence so a clean startup
+// never writes settings at all (the stringify diff is deliberate).
+export function attachLexers(
+	loaded: LoadedLexer[],
+	lexersSettings: Record<string, LexerSettings>,
+	notify: (msg: string) => void,
+): { attached: AttachedLexer[], changed: boolean } {
+	const before = JSON.stringify(lexersSettings);
+	const attached: AttachedLexer[] = [];
+	const seenIds = new Set<string>();
+	for (const entry of loaded) {
+		const { lexer, palette } = entry;
+		if (seenIds.has(lexer.id)) {
+			console.warn(`[lexer ${lexer.id}] duplicate lexer id — skipping ${entry.origin ?? '(built-in)'}`);
+			notify(`Lexer id "${lexer.id}" is already in use — skipping ${entry.origin ?? 'a duplicate'}.`);
+			continue;
+		}
+		seenIds.add(lexer.id);
+		for (const warning of validateLexer(lexer, palette)) {
+			console.warn(`[lexer ${lexer.id}] ${warning}`);
+		}
+
+		const existing = Object.entries(lexersSettings)
+			.find(([, ls]) => ls.lexerId === lexer.id);
+		const uuid = existing?.[0] ?? crypto.randomUUID();
+		let settings = existing?.[1];
+		if (settings) {
+			reconcileLexerSettings(settings, lexer, palette);
+		} else {
+			settings = seedLexerSettings(lexer, palette);
+		}
+		// settings of lexers that failed to load / were removed stay in
+		// lexersSettings untouched — they re-attach by id when back
+		lexersSettings[uuid] = settings;
+		attached.push({ ...entry, uuid });
+	}
+	return { attached, changed: JSON.stringify(lexersSettings) !== before };
 }
 
 // Restore the lexer's declared defaults: shipped colour values and all token
