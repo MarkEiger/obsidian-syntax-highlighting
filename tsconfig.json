@@ -7,6 +7,7 @@
     "target": "ES2018",
     "allowJs": true,
     "noImplicitAny": true,
+    "types" : ["node"],
     "moduleResolution": "node",
     "importHelpers": true,
     "lib": ["DOM", "ES2018", "ES6", "ES7"]
